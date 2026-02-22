@@ -228,11 +228,11 @@ input[type="number"] {
   border-radius: 16px;
   padding: 0.7rem;
   text-align: center;
-  border: 1px solid rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(255, 255, 255, 0.12);
   display: flex;
   flex-direction: column;
   gap: 1px;
-  animation: glowPulse 3s infinite;
 }
 
 .btn-primary {
@@ -383,36 +383,21 @@ input[type="number"] {
   margin-top: 0.4rem;
 }
 
-@keyframes shimmer {
-  0% {
-    border-color: rgba(56, 189, 248, 0.15);
-  }
-
-  50% {
-    border-color: rgba(56, 189, 248, 0.45);
-  }
-
-  100% {
-    border-color: rgba(56, 189, 248, 0.15);
-  }
-}
-
 .stat-box {
-  background: rgba(15, 23, 42, 0.35);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.4) 100%);
   padding: 0.55rem;
   border-radius: 14px;
   text-align: center;
-  border: 1px solid rgba(56, 189, 248, 0.18);
-  backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
-  animation: shimmer 4s ease-in-out infinite;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(255, 255, 255, 0.12);
+  transition: all 0.25s ease;
 }
 
 .stat-box:hover {
-  border-color: rgba(56, 189, 248, 0.5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 20px rgba(56, 189, 248, 0.15);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.5) 100%);
+  border-top-color: rgba(56, 189, 248, 0.3);
   transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
 }
 
 .stat-label {
@@ -430,15 +415,21 @@ input[type="number"] {
   color: #f1f5f9;
 }
 
+/* Hero Row */
+.hero-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
 .expectancy-hero {
-  background: rgba(15, 23, 42, 0.35);
-  margin-top: 0.6rem;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.4) 100%);
   padding: 0.75rem;
   border-radius: 16px;
   text-align: center;
-  border: 1px solid rgba(56, 189, 248, 0.18);
-  backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(255, 255, 255, 0.12);
 }
 
 .expectancy-hero.positive {
@@ -449,16 +440,48 @@ input[type="number"] {
   border-left: 4px solid #ef4444;
 }
 
+.balance-hero {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.4) 100%);
+  padding: 0.75rem;
+  border-radius: 16px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Charts Row */
+.charts-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.mini-chart-box {
+  flex: 1;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.4) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.5rem;
+}
+
+.mini-chart-title {
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
 /* Equity Curve */
 .equity-curve-container {
   margin-top: 0.6rem;
-  background: rgba(15, 23, 42, 0.35);
-  border: 1px solid rgba(56, 189, 248, 0.18);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.4) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-top-color: rgba(255, 255, 255, 0.12);
   border-radius: 16px;
   padding: 0.6rem;
   overflow: hidden;
-  backdrop-filter: blur(8px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .equity-curve-header {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import EquityCurve from './EquityCurve'
+import Charts from './Charts'
 import './App.css'
 
 const POINT_VALUE_PER_CONTRACT = 5;
@@ -381,7 +382,7 @@ function App() {
         {/* Left Panel */}
         <div className="card left-panel">
           <div className="header">
-            <h1>MES ALPHA CORE</h1>
+            <h1>ALPHA CORE</h1>
             <p>Trading Journal · MES Futures</p>
           </div>
 
@@ -501,6 +502,20 @@ function App() {
 
         {/* Right Panel */}
         <div className="card right-panel">
+          {/* Top Hero Row */}
+          <div className="hero-row">
+            <div className={`expectancy-hero ${stats.expectancyUSD >= 0 ? 'positive' : 'negative'}`}>
+              <div className="stat-label">Mathematical Expectancy per Trade</div>
+              <div style={{ fontSize: '2rem', fontWeight: '900' }}>{stats.expectancyUSD >= 0 ? '+' : ''}{formatUSD(stats.expectancyUSD)}</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Net after commissions</div>
+            </div>
+            <div className="balance-hero">
+              <div className="stat-label">Net Balance</div>
+              <div style={{ fontSize: '2rem', fontWeight: '900', color: stats.totalUSD >= 0 ? '#10b981' : '#ef4444' }}>{formatUSD(stats.totalUSD)}</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>After commissions</div>
+            </div>
+          </div>
+
           {/* Stats Row 1 */}
           <div className="stats-grid">
             <div className="stat-box">
@@ -553,11 +568,8 @@ function App() {
             </div>
           </div>
 
-          <div className={`expectancy-hero ${stats.expectancyUSD >= 0 ? 'positive' : 'negative'}`}>
-            <div className="stat-label">Mathematical Expectancy per Trade</div>
-            <div style={{ fontSize: '2rem', fontWeight: '900' }}>{stats.expectancyUSD >= 0 ? '+' : ''}{formatUSD(stats.expectancyUSD)}</div>
-            <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Net after commissions</div>
-          </div>
+          {/* Charts Row: Donut + Daily P&L */}
+          <Charts trades={trades} />
 
           {/* Equity Curve */}
           <EquityCurve trades={trades} />
