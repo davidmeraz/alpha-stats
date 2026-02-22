@@ -126,6 +126,16 @@ input:focus {
   border-color: #fbbf24;
 }
 
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .input-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -155,6 +165,82 @@ input:focus {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 0.25rem;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Settings Button */
+.btn-settings {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.btn-settings:hover {
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.settings-dropdown {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: fadeIn 0.15s ease;
+}
+
+.settings-dropdown label {
+  color: #94a3b8;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.btn-save-settings {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  color: #000;
+  font-weight: 700;
+  font-size: 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .balance-card {
@@ -210,6 +296,32 @@ input:focus {
   border-left: 4px solid #ef4444;
 }
 
+/* Equity Curve */
+.equity-curve-container {
+  margin-top: 0.75rem;
+  background: rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 0.75rem;
+  overflow: hidden;
+}
+
+.equity-curve-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+
+.equity-curve-title {
+  font-size: 0.6rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+/* Trades */
 .trades-container {
   margin-top: 1rem;
   flex: 1;
@@ -241,7 +353,7 @@ input:focus {
 
 .trade-row {
   display: grid;
-  grid-template-columns: 85px 85px 1fr 90px 85px 25px;
+  grid-template-columns: 75px 80px 1fr 70px 70px 80px;
   align-items: center;
   padding: 0.6rem 0.75rem;
   background: rgba(255, 255, 255, 0.02);
@@ -249,6 +361,11 @@ input:focus {
   margin-bottom: 0.4rem;
   border: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 0.8rem;
+  transition: background 0.15s;
+}
+
+.trade-row:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .trade-date-col {
@@ -277,6 +394,13 @@ input:focus {
   color: #fbbf24;
 }
 
+.trade-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .delete-btn {
   background: none;
   border: none;
@@ -284,8 +408,83 @@ input:focus {
   cursor: pointer;
   text-align: right;
   font-size: 0.9rem;
+  padding: 2px 4px;
+  transition: color 0.15s;
 }
 
 .delete-btn:hover {
   color: #ef4444;
+}
+
+/* Screenshot buttons */
+.screenshot-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  color: #f8fafc;
+  opacity: 1;
+  transition: all 0.15s;
+}
+
+.screenshot-btn:hover {
+  color: #f8fafc;
+  opacity: 1;
+}
+
+.screenshot-btn.has-img {
+  color: #f8fafc;
+  opacity: 0.85;
+}
+
+/* Lightbox */
+.lightbox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+.lightbox-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 85vh;
+}
+
+.lightbox-content img {
+  max-width: 100%;
+  max-height: 85vh;
+  border-radius: 12px;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f8fafc;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.lightbox-close:hover {
+  background: #ef4444;
 }

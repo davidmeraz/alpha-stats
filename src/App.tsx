@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import EquityCurve from './EquityCurve'
 import './App.css'
 
 const POINT_VALUE_PER_CONTRACT = 5;
@@ -12,9 +13,12 @@ interface Trade {
   exitPrice: number;
   points: number;
   ticks: number;
+  grossUSD: number;
+  commission: number;
   resultUSD: number;
   isWin: boolean;
   date: string;
+  screenshotFile?: string;
 }
 
 function App() {
@@ -25,7 +29,11 @@ function App() {
   const [exitPrice, setExitPrice] = useState<string>('');
   const [tradeDate, setTradeDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+  const [commissionPerContract, setCommissionPerContract] = useState<number>(0.62);
+  const [showSettings, setShowSettings] = useState(false);
+  const [commissionInput, setCommissionInput] = useState<string>('0.62');
 
+  // Stats
   const [winRate, setWinRate] = useState(0);
   const [avgWinUSD, setAvgWinUSD] = useState(0);
   const [avgLossUSD, setAvgLossUSD] = useState(0);
@@ -33,13 +41,21 @@ function App() {
   const [totalUSD, setTotalUSD] = useState(0);
   const [expectancyUSD, setExpectancyUSD] = useState(0);
 
-  // Persistence: Load from JSON file via IPC
+  // Lightbox
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const lightboxRef = useRef<HTMLDivElement>(null);
+
+  // Load data on mount
   useEffect(() => {
     const loadData = async () => {
       if (window.ipcRenderer) {
         const savedTrades = await window.ipcRenderer.invoke('load-trades');
-        if (savedTrades) {
-          setTrades(savedTrades);
+        if (savedTrades) setTrades(savedTrades);
+
+        const savedSettings = await window.ipcRenderer.invoke('load-settings');
+        if (savedSettings) {
+          setCommissionPerContract(savedSettings.commissionPerContract ?? 0.62);
+          setCommissionInput(String(savedSettings.commissionPerContract ?? 0.62));
         }
       }
       setIsLoaded(true);
@@ -47,7 +63,7 @@ function App() {
     loadData();
   }, []);
 
-  // Persistence: Save to JSON file via IPC on change + Calculate stats
+  // Save trades + recalculate stats
   useEffect(() => {
     const saveData = async () => {
       if (isLoaded && window.ipcRenderer) {
@@ -58,6 +74,21 @@ function App() {
     calculateStats();
   }, [trades, isLoaded]);
 
+  const saveSettings = async (commission: number) => {
+    setCommissionPerContract(commission);
+    if (window.ipcRenderer) {
+      await window.ipcRenderer.invoke('save-settings', { commissionPerContract: commission });
+    }
+  };
+
+  const handleCommissionSave = () => {
+    const val = parseFloat(commissionInput);
+    if (!isNaN(val) && val >= 0) {
+      saveSettings(val);
+      setShowSettings(false);
+    }
+  };
+
   const addTrade = () => {
     const entry = parseFloat(entryPrice);
     const exit = parseFloat(exitPrice);
@@ -65,7 +96,9 @@ function App() {
     if (isNaN(entry) || isNaN(exit) || isNaN(qty) || qty <= 0) return;
 
     const pointsResult = isLong ? (exit - entry) : (entry - exit);
-    const usdResult = pointsResult * POINT_VALUE_PER_CONTRACT * qty;
+    const grossUSD = pointsResult * POINT_VALUE_PER_CONTRACT * qty;
+    const totalCommission = commissionPerContract * qty;
+    const netUSD = grossUSD - totalCommission;
 
     const newTrade: Trade = {
       id: Date.now().toString(),
@@ -75,14 +108,15 @@ function App() {
       exitPrice: exit,
       points: pointsResult,
       ticks: pointsResult / TICK_SIZE,
-      resultUSD: usdResult,
-      isWin: pointsResult > 0,
+      grossUSD,
+      commission: totalCommission,
+      resultUSD: netUSD,
+      isWin: netUSD > 0,
       date: tradeDate
     };
 
     const updatedTrades = [newTrade, ...trades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setTrades(updatedTrades);
-
     setEntryPrice('');
     setExitPrice('');
   };
@@ -111,11 +145,30 @@ function App() {
     setExpectancyUSD((probWin * avgW) - (probLoss * avgL));
   };
 
-  const deleteTrade = async (id: string) => {
+  const deleteTrade = (id: string) => {
     if (window.confirm('¿Estás seguro de eliminar esta operación?')) {
-      const updatedTrades = trades.filter(tr => tr.id !== id);
-      setTrades(updatedTrades);
+      const trade = trades.find(t => t.id === id);
+      if (trade?.screenshotFile && window.ipcRenderer) {
+        window.ipcRenderer.invoke('delete-screenshot', trade.screenshotFile);
+      }
+      setTrades(trades.filter(tr => tr.id !== id));
     }
+  };
+
+  const attachScreenshot = async (tradeId: string) => {
+    if (!window.ipcRenderer) return;
+    const result = await window.ipcRenderer.invoke('attach-screenshot', tradeId);
+    if (result.success && result.filename) {
+      setTrades(prev => prev.map(t =>
+        t.id === tradeId ? { ...t, screenshotFile: result.filename } : t
+      ));
+    }
+  };
+
+  const viewScreenshot = async (filename: string) => {
+    if (!window.ipcRenderer) return;
+    const dataUrl = await window.ipcRenderer.invoke('load-screenshot', filename);
+    if (dataUrl) setLightboxSrc(dataUrl);
   };
 
   const getContractsQty = () => {
@@ -128,6 +181,13 @@ function App() {
   const previewPts = () => {
     const e = parseFloat(entryPrice), ex = parseFloat(exitPrice);
     return (isNaN(e) || isNaN(ex)) ? 0 : (isLong ? (ex - e) : (e - ex));
+  };
+
+  const previewNet = () => {
+    const pts = previewPts();
+    const qty = getContractsQty();
+    const gross = pts * POINT_VALUE_PER_CONTRACT * qty;
+    return gross - (commissionPerContract * qty);
   };
 
   const formatDateLabel = (dateStr: string) => {
@@ -144,7 +204,7 @@ function App() {
         <div className="card left-panel">
           <div className="header">
             <h1>MES ALPHA CORE</h1>
-            <p>Direct Market Analytics (JSON Save)</p>
+            <p>Direct Market Analytics</p>
           </div>
 
           <div className="input-group">
@@ -178,21 +238,44 @@ function App() {
           </div>
 
           <div className="preview-box">
-            <span style={{ fontSize: '0.6rem', color: '#64748b' }}>PREVISIÓN USD</span>
-            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: previewPts() >= 0 ? '#10b981' : '#ef4444' }}>
-              {formatUSD(previewPts() * 5 * getContractsQty())}
+            <span style={{ fontSize: '0.6rem', color: '#64748b' }}>PREVISIÓN NETA USD</span>
+            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: previewNet() >= 0 ? '#10b981' : '#ef4444' }}>
+              {formatUSD(previewNet())}
             </div>
             <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
               {previewPts() > 0 ? '+' : ''}{previewPts().toFixed(2)} pts | {(previewPts() / TICK_SIZE).toFixed(0)} ticks
+            </div>
+            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>
+              Comisión: {formatUSD(commissionPerContract * getContractsQty())}
             </div>
           </div>
 
           <button className="btn-primary" onClick={addTrade} disabled={!entryPrice || !exitPrice}>Registrar Operación</button>
 
+          {/* Commission config toggle */}
+          <button className="btn-settings" onClick={() => setShowSettings(!showSettings)}>
+            ⚙ Comisión: {formatUSD(commissionPerContract)}/contrato
+          </button>
+
+          {showSettings && (
+            <div className="settings-dropdown">
+              <label>Comisión por contrato (USD)</label>
+              <div className="settings-row">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={commissionInput}
+                  onChange={(e) => setCommissionInput(e.target.value)}
+                />
+                <button className="btn-save-settings" onClick={handleCommissionSave}>Guardar</button>
+              </div>
+            </div>
+          )}
+
           <div className="balance-card">
-            <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>BALANCE EN ARCHIVO</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: '850', color: '#fbbf24' }}>{formatUSD(totalUSD)}</div>
-            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>Local trades.json</div>
+            <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>BALANCE NETO</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '850', color: totalUSD >= 0 ? '#10b981' : '#ef4444' }}>{formatUSD(totalUSD)}</div>
+            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>Descontando comisiones</div>
           </div>
         </div>
 
@@ -224,8 +307,11 @@ function App() {
           <div className={`expectancy-hero ${expectancyUSD >= 0 ? 'positive' : 'negative'}`}>
             <div className="stat-label">Esperanza Matemática por Trade</div>
             <div style={{ fontSize: '1.75rem', fontWeight: '900' }}>{expectancyUSD >= 0 ? '+' : ''}{formatUSD(expectancyUSD)}</div>
-            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>Análisis extraído de archivo local</div>
+            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>Neto después de comisiones</div>
           </div>
+
+          {/* Equity Curve */}
+          <EquityCurve trades={trades} />
 
           <div className="trades-container">
             <h3>Bitácora Micro E-mini S&P 500</h3>
@@ -241,17 +327,43 @@ function App() {
                     {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
                   </span>
                   <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
-                  <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
+                  <span className="trade-actions">
+                    {t.screenshotFile ? (
+                      <>
+                        <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="Ver captura">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                        </button>
+                        <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Cambiar imagen">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                        </button>
+                      </>
+                    ) : (
+                      <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Adjuntar imagen">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                      </button>
+                    )}
+                    <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
+                  </span>
                 </div>
               ))}
               {trades.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#475569', marginTop: '2rem', fontSize: '0.8rem' }}>No hay trades en el archivo JSON.</div>
+                <div style={{ textAlign: 'center', color: '#475569', marginTop: '2rem', fontSize: '0.8rem' }}>No hay trades registrados.</div>
               )}
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* Lightbox Modal */}
+      {lightboxSrc && (
+        <div className="lightbox-overlay" ref={lightboxRef} onClick={(e) => { if (e.target === lightboxRef.current) setLightboxSrc(null); }}>
+          <div className="lightbox-content">
+            <button className="lightbox-close" onClick={() => setLightboxSrc(null)}>✕</button>
+            <img src={lightboxSrc} alt="Trade Screenshot" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

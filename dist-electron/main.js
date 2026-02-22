@@ -1,9 +1,7 @@
-import { app, BrowserWindow, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, screen } from "electron";
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-createRequire(import.meta.url);
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -26,8 +24,8 @@ function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
       preload: path.join(__dirname$1, "preload.mjs"),
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true
     }
   });
   win.once("ready-to-show", () => {
@@ -54,6 +52,11 @@ app.on("activate", () => {
   }
 });
 const DATA_PATH = path.join(app.getPath("userData"), "trades.json");
+const SETTINGS_PATH = path.join(app.getPath("userData"), "settings.json");
+const SCREENSHOTS_DIR = path.join(app.getPath("userData"), "screenshots");
+if (!fs.existsSync(SCREENSHOTS_DIR)) {
+  fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+}
 ipcMain.handle("save-trades", async (_, trades) => {
   try {
     await fs.promises.writeFile(DATA_PATH, JSON.stringify(trades, null, 2), "utf-8");
@@ -73,6 +76,72 @@ ipcMain.handle("load-trades", async () => {
   } catch (error) {
     console.error("Failed to load trades:", error);
     return [];
+  }
+});
+ipcMain.handle("save-settings", async (_, settings) => {
+  try {
+    await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to save settings:", error);
+    return { success: false, error };
+  }
+});
+ipcMain.handle("load-settings", async () => {
+  try {
+    if (fs.existsSync(SETTINGS_PATH)) {
+      const data = await fs.promises.readFile(SETTINGS_PATH, "utf-8");
+      return JSON.parse(data);
+    }
+    return { commissionPerContract: 0.62 };
+  } catch (error) {
+    console.error("Failed to load settings:", error);
+    return { commissionPerContract: 0.62 };
+  }
+});
+ipcMain.handle("attach-screenshot", async (_, tradeId) => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp"] }]
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    const sourcePath = result.filePaths[0];
+    const ext = path.extname(sourcePath);
+    const destFilename = `${tradeId}${ext}`;
+    const destPath = path.join(SCREENSHOTS_DIR, destFilename);
+    await fs.promises.copyFile(sourcePath, destPath);
+    return { success: true, filename: destFilename };
+  } catch (error) {
+    console.error("Failed to attach screenshot:", error);
+    return { success: false, error };
+  }
+});
+ipcMain.handle("load-screenshot", async (_, filename) => {
+  try {
+    const filePath = path.join(SCREENSHOTS_DIR, filename);
+    if (!fs.existsSync(filePath)) return null;
+    const data = await fs.promises.readFile(filePath);
+    const ext = path.extname(filename).toLowerCase().replace(".", "");
+    const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+    return `data:${mime};base64,${data.toString("base64")}`;
+  } catch (error) {
+    console.error("Failed to load screenshot:", error);
+    return null;
+  }
+});
+ipcMain.handle("delete-screenshot", async (_, filename) => {
+  try {
+    const filePath = path.join(SCREENSHOTS_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      await fs.promises.unlink(filePath);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete screenshot:", error);
+    return { success: false, error };
   }
 });
 app.whenReady().then(createWindow);
