@@ -1,238 +1,253 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 
+const POINT_VALUE_PER_CONTRACT = 5;
+const TICK_SIZE = 0.25;
+
 interface Trade {
   id: string;
-  result: number;
-  tp: number;
-  sl: number;
-  rr: number;
+  isLong: boolean;
+  contracts: number;
+  entryPrice: number;
+  exitPrice: number;
+  points: number;
+  ticks: number;
+  resultUSD: number;
+  isWin: boolean;
   date: string;
 }
 
 function App() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [isLong, setIsLong] = useState<boolean>(true);
+  const [contracts, setContracts] = useState<string>('1');
+  const [entryPrice, setEntryPrice] = useState<string>('');
+  const [exitPrice, setExitPrice] = useState<string>('');
+  const [tradeDate, setTradeDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Form Inputs
-  const [inputResult, setInputResult] = useState<string>('');
-  const [inputTP, setInputTP] = useState<string>('');
-  const [inputSL, setInputSL] = useState<string>('');
-
-  // Stats
   const [winRate, setWinRate] = useState(0);
-  const [avgWin, setAvgWin] = useState(0);
-  const [avgLoss, setAvgLoss] = useState(0);
+  const [avgWinUSD, setAvgWinUSD] = useState(0);
+  const [avgLossUSD, setAvgLossUSD] = useState(0);
   const [avgRR, setAvgRR] = useState(0);
-  const [expectancy, setExpectancy] = useState(0);
+  const [totalUSD, setTotalUSD] = useState(0);
+  const [expectancyUSD, setExpectancyUSD] = useState(0);
 
+  // Persistence: Load from JSON file via IPC
   useEffect(() => {
+    const loadData = async () => {
+      if (window.ipcRenderer) {
+        const savedTrades = await window.ipcRenderer.invoke('load-trades');
+        if (savedTrades) {
+          setTrades(savedTrades);
+        }
+      }
+      setIsLoaded(true);
+    };
+    loadData();
+  }, []);
+
+  // Persistence: Save to JSON file via IPC on change + Calculate stats
+  useEffect(() => {
+    const saveData = async () => {
+      if (isLoaded && window.ipcRenderer) {
+        await window.ipcRenderer.invoke('save-trades', trades);
+      }
+    };
+    saveData();
     calculateStats();
-  }, [trades]);
+  }, [trades, isLoaded]);
 
   const addTrade = () => {
-    const res = parseFloat(inputResult);
-    const tp = parseFloat(inputTP);
-    const sl = parseFloat(inputSL);
+    const entry = parseFloat(entryPrice);
+    const exit = parseFloat(exitPrice);
+    const qty = parseInt(contracts);
+    if (isNaN(entry) || isNaN(exit) || isNaN(qty) || qty <= 0) return;
 
-    if (isNaN(res)) return;
-
-    // Calculate RR for this specific trade if TP/SL provided, otherwise 0
-    // Concept RR = TP / SL (absolute values)
-    const rrValue = (tp && sl && sl !== 0) ? Math.abs(tp / sl) : 0;
+    const pointsResult = isLong ? (exit - entry) : (entry - exit);
+    const usdResult = pointsResult * POINT_VALUE_PER_CONTRACT * qty;
 
     const newTrade: Trade = {
       id: Date.now().toString(),
-      result: res,
-      tp: tp || 0,
-      sl: sl || 0,
-      rr: rrValue,
-      date: new Date().toLocaleString()
+      isLong,
+      contracts: qty,
+      entryPrice: entry,
+      exitPrice: exit,
+      points: pointsResult,
+      ticks: pointsResult / TICK_SIZE,
+      resultUSD: usdResult,
+      isWin: pointsResult > 0,
+      date: tradeDate
     };
 
-    setTrades([newTrade, ...trades]);
+    const updatedTrades = [newTrade, ...trades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setTrades(updatedTrades);
 
-    // Reset form
-    setInputResult('');
-    setInputTP('');
-    setInputSL('');
-  };
-
-  const deleteTrade = (id: string) => {
-    setTrades(trades.filter(t => t.id !== id));
+    setEntryPrice('');
+    setExitPrice('');
   };
 
   const calculateStats = () => {
     if (trades.length === 0) {
-      setWinRate(0); setAvgWin(0); setAvgLoss(0); setExpectancy(0); setAvgRR(0);
+      setWinRate(0); setAvgWinUSD(0); setAvgLossUSD(0); setAvgRR(0); setTotalUSD(0); setExpectancyUSD(0);
       return;
     }
-
-    const wins = trades.filter(t => t.result > 0);
-    const losses = trades.filter(t => t.result < 0);
+    const wins = trades.filter(t => t.isWin);
+    const losses = trades.filter(t => !t.isWin);
 
     const wRate = (wins.length / trades.length) * 100;
-    const aWin = wins.length > 0 ? wins.reduce((acc, t) => acc + t.result, 0) / wins.length : 0;
-    const aLoss = losses.length > 0 ? Math.abs(losses.reduce((acc, t) => acc + t.result, 0) / losses.length) : 0;
-
-    // Average RR of all trades that had RR defined
-    const tradesWithRR = trades.filter(t => t.rr > 0);
-    const aRR = tradesWithRR.length > 0 ? tradesWithRR.reduce((acc, t) => acc + t.rr, 0) / tradesWithRR.length : 0;
+    const avgW = wins.length > 0 ? wins.reduce((a, t) => a + t.resultUSD, 0) / wins.length : 0;
+    const avgL = losses.length > 0 ? Math.abs(losses.reduce((a, t) => a + t.resultUSD, 0) / losses.length) : 0;
+    const rr = avgL !== 0 ? avgW / avgL : 0;
 
     setWinRate(wRate);
-    setAvgWin(aWin);
-    setAvgLoss(aLoss);
-    setAvgRR(aRR);
+    setAvgWinUSD(avgW);
+    setAvgLossUSD(avgL);
+    setAvgRR(rr);
+    setTotalUSD(trades.reduce((a, t) => a + t.resultUSD, 0));
 
-    // Esperanza = (PW * AW) - (PL * AL)
-    const probWin = wRate / 100;
+    const probWin = wins.length / trades.length;
     const probLoss = 1 - probWin;
-    const exp = (probWin * aWin) - (probLoss * aLoss);
-    setExpectancy(exp);
+    setExpectancyUSD((probWin * avgW) - (probLoss * avgL));
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+  const deleteTrade = async (id: string) => {
+    if (window.confirm('¿Estás seguro de eliminar esta operación?')) {
+      const updatedTrades = trades.filter(tr => tr.id !== id);
+      setTrades(updatedTrades);
+    }
+  };
+
+  const getContractsQty = () => {
+    const qty = parseInt(contracts);
+    return isNaN(qty) ? 0 : qty;
+  };
+
+  const formatUSD = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+
+  const previewPts = () => {
+    const e = parseFloat(entryPrice), ex = parseFloat(exitPrice);
+    return (isNaN(e) || isNaN(ex)) ? 0 : (isLong ? (ex - e) : (e - ex));
+  };
+
+  const formatDateLabel = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year.slice(2)}`;
   };
 
   return (
     <div className="app-container">
       <div className="main-layout">
 
-        {/* Lado Izquierdo: Entrada de Datos */}
+        {/* Left Panel */}
         <div className="card left-panel">
           <div className="header">
-            <h1>Alpha Stats</h1>
-            <p>Configuración de Operación</p>
+            <h1>MES ALPHA CORE</h1>
+            <p>Direct Market Analytics (JSON Save)</p>
           </div>
 
           <div className="input-group">
-            <label>Resultado Final ($)</label>
-            <div className="input-wrapper">
-              <span className="input-prefix">$</span>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Ganancia (+) o Pérdida (-)"
-                value={inputResult}
-                onChange={(e) => setInputResult(e.target.value)}
-              />
+            <label>Tipo</label>
+            <div className="outcome-selector">
+              <button className={`outcome-btn ${isLong ? 'active' : ''}`} style={isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setIsLong(true)}>LONG</button>
+              <button className={`outcome-btn ${!isLong ? 'active' : ''}`} style={!isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setIsLong(false)}>SHORT</button>
             </div>
           </div>
 
           <div className="input-row">
             <div className="input-group">
-              <label>Take Profit ($)</label>
-              <div className="input-wrapper">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Objetivo"
-                  value={inputTP}
-                  onChange={(e) => setInputTP(e.target.value)}
-                />
-              </div>
+              <label>Fecha</label>
+              <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} />
             </div>
             <div className="input-group">
-              <label>Stop Loss ($)</label>
-              <div className="input-wrapper">
-                <span className="input-prefix">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Riesgo"
-                  value={inputSL}
-                  onChange={(e) => setInputSL(e.target.value)}
-                />
-              </div>
+              <label>Contratos</label>
+              <input type="number" value={contracts} onChange={(e) => setContracts(e.target.value)} />
             </div>
           </div>
 
-          <div style={{
-            background: 'rgba(56, 189, 248, 0.05)',
-            padding: '1rem',
-            borderRadius: '12px',
-            fontSize: '0.8rem',
-            color: '#38bdf8',
-            border: '1px dashed rgba(56, 189, 248, 0.2)'
-          }}>
-            <strong>Riesgo:Beneficio Teórico:</strong> 1 : {(inputTP && inputSL) ? (Math.abs(parseFloat(inputTP) / parseFloat(inputSL)) || 0).toFixed(2) : '0.00'}
+          <div className="input-row">
+            <div className="input-group">
+              <label>Entrada</label>
+              <input type="number" step="0.25" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} />
+            </div>
+            <div className="input-group">
+              <label>Salida</label>
+              <input type="number" step="0.25" placeholder="0.00" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} />
+            </div>
           </div>
 
-          <button className="btn-primary" onClick={addTrade}>
-            Registrar Trade
-          </button>
-
-          <div style={{ marginTop: 'auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
-              <span>Total en Historial:</span>
-              <span>{trades.length}</span>
+          <div className="preview-box">
+            <span style={{ fontSize: '0.6rem', color: '#64748b' }}>PREVISIÓN USD</span>
+            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: previewPts() >= 0 ? '#10b981' : '#ef4444' }}>
+              {formatUSD(previewPts() * 5 * getContractsQty())}
             </div>
+            <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+              {previewPts() > 0 ? '+' : ''}{previewPts().toFixed(2)} pts | {(previewPts() / TICK_SIZE).toFixed(0)} ticks
+            </div>
+          </div>
+
+          <button className="btn-primary" onClick={addTrade} disabled={!entryPrice || !exitPrice}>Registrar Operación</button>
+
+          <div className="balance-card">
+            <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>BALANCE EN ARCHIVO</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '850', color: '#fbbf24' }}>{formatUSD(totalUSD)}</div>
+            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>Local trades.json</div>
           </div>
         </div>
 
-        {/* Lado Derecho: Estadísticas y Lista */}
+        {/* Right Panel */}
         <div className="card right-panel">
-          <div className="stats-panel">
+          <div className="stats-grid">
             <div className="stat-box">
               <div className="stat-label">Win Rate</div>
-              <div className="stat-value" style={{ color: '#38bdf8' }}>{winRate.toFixed(1)}%</div>
+              <div className="stat-value" style={{ color: '#fbbf24' }}>{winRate.toFixed(1)}%</div>
             </div>
             <div className="stat-box">
               <div className="stat-label">Avg Win</div>
-              <div className="stat-value" style={{ color: '#10b981' }}>{formatCurrency(avgWin)}</div>
+              <div className="stat-value" style={{ color: '#10b981' }}>{formatUSD(avgWinUSD)}</div>
             </div>
             <div className="stat-box">
               <div className="stat-label">Avg Loss</div>
-              <div className="stat-value" style={{ color: '#ef4444' }}>{formatCurrency(avgLoss)}</div>
+              <div className="stat-value" style={{ color: '#ef4444' }}>{formatUSD(avgLossUSD)}</div>
             </div>
             <div className="stat-box">
-              <div className="stat-label">Avg R:B</div>
+              <div className="stat-label">Prom. R:R</div>
               <div className="stat-value" style={{ color: '#8b5cf6' }}>1:{avgRR.toFixed(2)}</div>
             </div>
-
-            <div className={`expectancy-display ${expectancy >= 0 ? 'positive' : 'negative'}`}>
-              <div className="stat-label" style={{ color: 'inherit', opacity: 0.8 }}>Esperanza Matemática Global</div>
-              <div className="stat-value" style={{ fontSize: '2.5rem' }}>
-                {expectancy > 0 ? '+' : ''}{formatCurrency(expectancy)}
-              </div>
-              <div style={{ fontSize: '0.8rem', marginTop: '0.5rem', fontWeight: 500 }}>
-                {expectancy > 0
-                  ? 'SISTEMA RENTABLE: Tu ventaja estadística está confirmada.'
-                  : expectancy < 0
-                    ? 'RIESGO DETECTADO: El sistema no es sostenible con estos parámetros.'
-                    : 'Registra tus operaciones con TP/SL para analizar tu desempeño.'}
-              </div>
+            <div className="stat-box">
+              <div className="stat-label">Total Trades</div>
+              <div className="stat-value" style={{ color: '#38bdf8' }}>{trades.length}</div>
             </div>
           </div>
 
-          <div className="header" style={{ marginTop: '1rem', marginBottom: '0.5rem' }}>
-            <h3>Historial Detallado</h3>
+          <div className={`expectancy-hero ${expectancyUSD >= 0 ? 'positive' : 'negative'}`}>
+            <div className="stat-label">Esperanza Matemática por Trade</div>
+            <div style={{ fontSize: '1.75rem', fontWeight: '900' }}>{expectancyUSD >= 0 ? '+' : ''}{formatUSD(expectancyUSD)}</div>
+            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>Análisis extraído de archivo local</div>
           </div>
 
-          <div className="trades-list-container">
-            {trades.map(trade => (
-              <div key={trade.id} className={`trade-item ${trade.result >= 0 ? 'win' : 'loss'}`}>
-                <div className="trade-main">
-                  <span className="trade-amount">
-                    {trade.result > 0 ? '+' : ''}{formatCurrency(trade.result)}
+          <div className="trades-container">
+            <h3>Bitácora Micro E-mini S&P 500</h3>
+            <div className="trades-list">
+              {trades.map(t => (
+                <div key={t.id} className="trade-row">
+                  <span className="trade-date-col">{formatDateLabel(t.date)}</span>
+                  <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
+                    {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
                   </span>
-                  <span className="trade-date">{trade.date}</span>
+                  <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
+                  <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
+                    {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
+                  </span>
+                  <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
+                  <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
                 </div>
-                <div className="trade-rr-info">
-                  <span>TP: ${trade.tp} | SL: ${trade.sl}</span>
-                  <span style={{ color: '#e2e8f0', fontWeight: 'bold' }}>R:B 1:{trade.rr.toFixed(2)}</span>
-                </div>
-                <button className="delete-btn" onClick={() => deleteTrade(trade.id)}>
-                  ✕
-                </button>
-              </div>
-            ))}
-            {trades.length === 0 && (
-              <div style={{ textAlign: 'center', color: '#475569', marginTop: '3rem' }}>
-                Esperando datos de NinjaTrader...
-              </div>
-            )}
+              ))}
+              {trades.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#475569', marginTop: '2rem', fontSize: '0.8rem' }}>No hay trades en el archivo JSON.</div>
+              )}
+            </div>
           </div>
         </div>
 

@@ -1,4 +1,5 @@
-import { app, BrowserWindow, screen } from 'electron'
+import { app, BrowserWindow, screen, ipcMain } from 'electron'
+import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -79,6 +80,31 @@ app.on('activate', () => {
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow()
+  }
+})
+
+const DATA_PATH = path.join(app.getPath('userData'), 'trades.json')
+
+ipcMain.handle('save-trades', async (_, trades) => {
+  try {
+    await fs.promises.writeFile(DATA_PATH, JSON.stringify(trades, null, 2), 'utf-8')
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to save trades:', error)
+    return { success: false, error }
+  }
+})
+
+ipcMain.handle('load-trades', async () => {
+  try {
+    if (fs.existsSync(DATA_PATH)) {
+      const data = await fs.promises.readFile(DATA_PATH, 'utf-8')
+      return JSON.parse(data)
+    }
+    return []
+  } catch (error) {
+    console.error('Failed to load trades:', error)
+    return []
   }
 })
 
