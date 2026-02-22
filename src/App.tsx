@@ -444,21 +444,21 @@ function App() {
           </div>
 
           <div className="preview-box">
-            <span style={{ fontSize: '0.6rem', color: '#64748b' }}>NET USD PREVIEW</span>
-            <div style={{ fontSize: '1.25rem', fontWeight: '800', color: previewNet() >= 0 ? '#10b981' : '#ef4444' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}>NET USD PREVIEW</span>
+            <div style={{ fontSize: '1.4rem', fontWeight: '800', color: previewNet() >= 0 ? '#10b981' : '#ef4444' }}>
               {formatUSD(previewNet())}
             </div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+            <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
               {previewPts() > 0 ? '+' : ''}{previewPts().toFixed(2)} pts | {(previewPts() / TICK_SIZE).toFixed(0)} ticks
             </div>
-            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
               Commission: {formatUSD(commissionPerContract * getContractsQty())}
             </div>
           </div>
 
           <button className="btn-primary" onClick={addTrade} disabled={!entryPrice || !exitPrice}>
             Log Trade
-            <span style={{ fontSize: '0.55rem', opacity: 0.7, marginLeft: '6px' }}>ENTER ↵</span>
+            <span style={{ fontSize: '0.65rem', opacity: 0.7, marginLeft: '6px' }}>ENTER ↵</span>
           </button>
 
           {/* Commission config toggle */}
@@ -482,9 +482,9 @@ function App() {
           )}
 
           <div className="balance-card">
-            <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>NET BALANCE</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: '850', color: stats.totalUSD >= 0 ? '#10b981' : '#ef4444' }}>{formatUSD(stats.totalUSD)}</div>
-            <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>After commissions</div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>NET BALANCE</div>
+            <div style={{ fontSize: '1.3rem', fontWeight: '850', color: stats.totalUSD >= 0 ? '#10b981' : '#ef4444' }}>{formatUSD(stats.totalUSD)}</div>
+            <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>After commissions</div>
           </div>
 
           <div className="db-actions">
@@ -505,7 +505,7 @@ function App() {
           <div className="stats-grid">
             <div className="stat-box">
               <div className="stat-label">Win Rate</div>
-              <div className="stat-value" style={{ color: '#fbbf24' }}>{stats.winRate.toFixed(1)}%</div>
+              <div className="stat-value" style={{ color: '#38bdf8' }}>{stats.winRate.toFixed(1)}%</div>
             </div>
             <div className="stat-box">
               <div className="stat-label">Avg Win</div>
@@ -529,7 +529,7 @@ function App() {
           <div className="stats-grid stats-grid-secondary">
             <div className="stat-box">
               <div className="stat-label">Profit Factor</div>
-              <div className="stat-value" style={{ color: stats.profitFactor >= 1.5 ? '#10b981' : stats.profitFactor >= 1 ? '#fbbf24' : '#ef4444' }}>
+              <div className="stat-value" style={{ color: stats.profitFactor >= 1.5 ? '#10b981' : stats.profitFactor >= 1 ? '#38bdf8' : '#ef4444' }}>
                 {stats.profitFactor >= 999 ? '∞' : stats.profitFactor.toFixed(2)}
               </div>
             </div>
@@ -555,8 +555,8 @@ function App() {
 
           <div className={`expectancy-hero ${stats.expectancyUSD >= 0 ? 'positive' : 'negative'}`}>
             <div className="stat-label">Mathematical Expectancy per Trade</div>
-            <div style={{ fontSize: '1.75rem', fontWeight: '900' }}>{stats.expectancyUSD >= 0 ? '+' : ''}{formatUSD(stats.expectancyUSD)}</div>
-            <div style={{ fontSize: '0.7rem', opacity: 0.7 }}>Net after commissions</div>
+            <div style={{ fontSize: '2rem', fontWeight: '900' }}>{stats.expectancyUSD >= 0 ? '+' : ''}{formatUSD(stats.expectancyUSD)}</div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Net after commissions</div>
           </div>
 
           {/* Equity Curve */}

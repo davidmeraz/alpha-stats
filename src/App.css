@@ -14,7 +14,33 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: radial-gradient(circle at top, #0f172a, #020617);
+  background: radial-gradient(circle at top right, #0a192f, #020617);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
+  }
+
+  100% {
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  }
 }
 
 #root {
@@ -34,24 +60,24 @@ body {
 
 .main-layout {
   display: grid;
-  grid-template-columns: 330px 1fr;
+  grid-template-columns: minmax(320px, 360px) 1fr;
   gap: 1.25rem;
   width: 100%;
-  max-width: 1400px;
   height: 100%;
-  max-height: 920px;
 }
 
 .card {
-  background: rgba(30, 41, 59, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(56, 189, 248, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   border-radius: 20px;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .left-panel {
@@ -69,18 +95,19 @@ body {
 }
 
 .header h1 {
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   letter-spacing: 0.05em;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0;
+  text-shadow: 0 2px 10px rgba(56, 189, 248, 0.3);
 }
 
 .header p {
   color: #64748b;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   margin: 2px 0 0 0;
 }
 
@@ -91,11 +118,11 @@ body {
 }
 
 .input-group label {
-  color: #94a3b8;
-  font-size: 0.65rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.01em;
 }
 
 .outcome-selector {
@@ -112,7 +139,7 @@ body {
   color: #64748b;
   cursor: pointer;
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   transition: all 0.2s;
 }
 
@@ -128,7 +155,7 @@ textarea {
   border-radius: 10px;
   padding: 0.45rem 0.75rem;
   color: #f8fafc;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   outline: none;
   width: 100%;
   box-sizing: border-box;
@@ -137,7 +164,8 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: #fbbf24;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
 input[type="number"]::-webkit-inner-spin-button,
@@ -172,59 +200,62 @@ input[type="number"] {
   background: rgba(15, 23, 42, 0.4);
   color: #64748b;
   cursor: pointer;
-  font-size: 0.6rem;
+  font-size: 0.7rem;
   font-weight: 600;
   transition: all 0.15s;
 }
 
 .setup-tag.active {
-  background: rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.4);
-  color: #a78bfa;
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
 }
 
 .setup-tag:hover {
-  border-color: rgba(139, 92, 246, 0.3);
+  border-color: rgba(56, 189, 248, 0.3);
 }
 
 /* Trade Note Input */
 .trade-note-input {
   resize: none;
   min-height: 36px;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   line-height: 1.4;
 }
 
 .preview-box {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(15, 23, 42, 0.4);
   border-radius: 16px;
   padding: 0.7rem;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.15);
   display: flex;
   flex-direction: column;
   gap: 1px;
+  animation: glowPulse 3s infinite;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
   border: none;
   border-radius: 12px;
   padding: 0.65rem;
-  color: #000;
+  color: #fff;
   font-weight: 800;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   cursor: pointer;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  transition: opacity 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
 }
 
-.btn-primary:hover {
-  opacity: 0.9;
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.6);
 }
 
 .btn-primary:disabled {
@@ -239,20 +270,21 @@ input[type="number"] {
   border-radius: 10px;
   padding: 0.4rem 0.75rem;
   color: #94a3b8;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
 }
 
 .btn-settings:hover {
-  border-color: rgba(251, 191, 36, 0.3);
-  color: #fbbf24;
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  transform: translateY(-1px);
 }
 
 .settings-dropdown {
   background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.25);
   border-radius: 12px;
   padding: 0.75rem;
   display: flex;
@@ -262,10 +294,10 @@ input[type="number"] {
 }
 
 .settings-dropdown label {
-  color: #94a3b8;
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  font-weight: 600;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  text-transform: none;
+  font-weight: 500;
 }
 
 .settings-row {
@@ -275,15 +307,20 @@ input[type="number"] {
 }
 
 .btn-save-settings {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
   border: none;
   border-radius: 8px;
   padding: 0.4rem 0.75rem;
-  color: #000;
+  color: #fff;
   font-weight: 700;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   cursor: pointer;
   white-space: nowrap;
+  transition: transform 0.2s;
+}
+
+.btn-save-settings:hover {
+  transform: scale(1.05);
 }
 
 @keyframes fadeIn {
@@ -300,11 +337,12 @@ input[type="number"] {
 
 .balance-card {
   margin-top: auto;
-  background: rgba(251, 191, 36, 0.05);
-  border: 1px solid rgba(251, 191, 36, 0.1);
+  background: rgba(56, 189, 248, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   padding: 0.55rem;
   border-radius: 12px;
   text-align: center;
+  box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.05);
 }
 
 .db-actions {
@@ -323,7 +361,7 @@ input[type="number"] {
   border-radius: 8px;
   padding: 0.4rem;
   color: #64748b;
-  font-size: 0.6rem;
+  font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -345,33 +383,62 @@ input[type="number"] {
   margin-top: 0.4rem;
 }
 
+@keyframes shimmer {
+  0% {
+    border-color: rgba(56, 189, 248, 0.15);
+  }
+
+  50% {
+    border-color: rgba(56, 189, 248, 0.45);
+  }
+
+  100% {
+    border-color: rgba(56, 189, 248, 0.15);
+  }
+}
+
 .stat-box {
-  background: rgba(15, 23, 42, 0.3);
+  background: rgba(15, 23, 42, 0.35);
   padding: 0.55rem;
-  border-radius: 12px;
+  border-radius: 14px;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+  animation: shimmer 4s ease-in-out infinite;
+}
+
+.stat-box:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 20px rgba(56, 189, 248, 0.15);
+  transform: translateY(-2px);
 }
 
 .stat-label {
-  font-size: 0.55rem;
-  color: #64748b;
-  text-transform: uppercase;
-  margin-bottom: 1px;
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  text-transform: none;
+  font-weight: 400;
+  margin-bottom: 2px;
+  letter-spacing: 0.01em;
 }
 
 .stat-value {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f1f5f9;
 }
 
 .expectancy-hero {
-  background: rgba(15, 23, 42, 0.3);
+  background: rgba(15, 23, 42, 0.35);
   margin-top: 0.6rem;
   padding: 0.75rem;
   border-radius: 16px;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .expectancy-hero.positive {
@@ -385,11 +452,13 @@ input[type="number"] {
 /* Equity Curve */
 .equity-curve-container {
   margin-top: 0.6rem;
-  background: rgba(15, 23, 42, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(56, 189, 248, 0.18);
   border-radius: 16px;
   padding: 0.6rem;
   overflow: hidden;
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .equity-curve-header {
@@ -400,11 +469,11 @@ input[type="number"] {
 }
 
 .equity-curve-title {
-  font-size: 0.55rem;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 700;
+  font-size: 0.65rem;
+  color: #cbd5e1;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 500;
 }
 
 /* Trades */
@@ -424,9 +493,10 @@ input[type="number"] {
 }
 
 .trades-header h3 {
-  font-size: 0.8rem;
-  color: #94a3b8;
+  font-size: 0.95rem;
+  color: #e2e8f0;
   margin: 0;
+  font-weight: 500;
 }
 
 .btn-export {
@@ -438,7 +508,7 @@ input[type="number"] {
   border-radius: 8px;
   padding: 4px 10px;
   color: #94a3b8;
-  font-size: 0.6rem;
+  font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -469,13 +539,17 @@ input[type="number"] {
   border-radius: 10px;
   margin-bottom: 0.35rem;
   border: 1px solid rgba(255, 255, 255, 0.03);
-  font-size: 0.75rem;
-  transition: background 0.15s;
+  font-size: 0.85rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
+  position: relative;
 }
 
 .trade-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(56, 189, 248, 0.06);
+  border-color: rgba(56, 189, 248, 0.2);
+  transform: translateX(4px);
+  box-shadow: -4px 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 .trade-row-main {
@@ -488,26 +562,26 @@ input[type="number"] {
 
 .trade-date-col {
   color: #64748b;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
 }
 
 .trade-type {
   font-weight: 800;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
 }
 
 .trade-prices {
   color: #94a3b8;
   font-family: monospace;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
 }
 
 .trade-setup-badge {
-  background: rgba(139, 92, 246, 0.12);
-  color: #a78bfa;
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 0.55rem;
+  font-size: 0.65rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -520,8 +594,8 @@ input[type="number"] {
 .trade-usd {
   text-align: right;
   font-weight: 700;
-  color: #fbbf24;
-  font-size: 0.72rem;
+  color: #38bdf8;
+  font-size: 0.85rem;
 }
 
 .trade-actions {
@@ -553,7 +627,8 @@ input[type="number"] {
 }
 
 .edit-btn:hover {
-  color: #fbbf24;
+  color: #38bdf8;
+  transform: rotate(90deg);
 }
 
 /* Inline Edit Form */
@@ -580,10 +655,10 @@ input[type="number"] {
 }
 
 .edit-field label {
-  font-size: 0.55rem;
-  color: #64748b;
-  text-transform: uppercase;
-  font-weight: 600;
+  font-size: 0.6rem;
+  color: #cbd5e1;
+  text-transform: none;
+  font-weight: 500;
 }
 
 .edit-field select {
@@ -598,7 +673,8 @@ input[type="number"] {
 }
 
 .edit-field select:focus {
-  border-color: #fbbf24;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
 .edit-actions {
@@ -609,14 +685,19 @@ input[type="number"] {
 }
 
 .btn-edit-save {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
   border: none;
   border-radius: 8px;
   padding: 0.4rem 1rem;
-  color: #000;
+  color: #fff;
   font-weight: 700;
   font-size: 0.7rem;
   cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-edit-save:hover {
+  opacity: 0.9;
 }
 
 .btn-edit-cancel {
@@ -666,7 +747,8 @@ input[type="number"] {
 }
 
 .screenshot-btn:hover {
-  color: #fbbf24;
+  color: #38bdf8;
+  transform: scale(1.1);
 }
 
 .screenshot-btn.has-img {
