@@ -41,7 +41,7 @@ function EquityCurve({ trades }: EquityCurveProps) {
             ctx.fillStyle = '#475569';
             ctx.font = '12px Inter, system-ui, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Sin datos para la curva de equidad', W / 2, H / 2);
+            ctx.fillText('No data for equity curve', W / 2, H / 2);
             return;
         }
 
