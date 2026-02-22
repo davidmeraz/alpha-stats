@@ -7,6 +7,10 @@ import './App.css'
 const POINT_VALUE_PER_CONTRACT = 5;
 const TICK_SIZE = 0.25;
 
+const floor1Str = (val: number) => (Math.floor(val * 10) / 10).toFixed(1);
+const floor1 = (val: number) => Math.floor(val * 10) / 10;
+const floor2Str = (val: number) => (Math.floor(val * 100) / 100).toFixed(2);
+
 const SETUP_TAGS = ['Breakout', 'Pullback', 'Range', 'Reversal', 'Scalp', 'Trend', 'Other'] as const;
 type SetupTag = typeof SETUP_TAGS[number];
 
@@ -16,8 +20,12 @@ interface Trade {
   contracts: number;
   entryPrice: number;
   exitPrice: number;
+  stopLoss?: number;
+  takeProfit?: number;
   points: number;
   ticks: number;
+  riskPoints?: number;
+  rewardPoints?: number;
   grossUSD: number;
   commission: number;
   resultUSD: number;
@@ -40,7 +48,7 @@ interface Stats {
   maxDrawdown: number;
   bestTrade: number;
   worstTrade: number;
-  currentStreak: number; // positive = win streak, negative = loss streak
+  bestDayGains: number;
   totalTrades: number;
 }
 
@@ -48,7 +56,7 @@ const EMPTY_STATS: Stats = {
   winRate: 0, avgWinUSD: 0, avgLossUSD: 0, avgRR: 0,
   totalUSD: 0, expectancyUSD: 0, profitFactor: 0,
   maxDrawdown: 0, bestTrade: 0, worstTrade: 0,
-  currentStreak: 0, totalTrades: 0,
+  bestDayGains: 0, totalTrades: 0,
 };
 
 function TitleBar() {
@@ -89,6 +97,8 @@ function App() {
   const [contracts, setContracts] = useState<string>('1');
   const [entryPrice, setEntryPrice] = useState<string>('');
   const [exitPrice, setExitPrice] = useState<string>('');
+  const [stopLossPrice, setStopLossPrice] = useState<string>('');
+  const [takeProfitPrice, setTakeProfitPrice] = useState<string>('');
   const [tradeDate, setTradeDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [tradeNote, setTradeNote] = useState<string>('');
   const [tradeSetup, setTradeSetup] = useState<SetupTag>('Breakout');
@@ -97,6 +107,11 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [commissionInput, setCommissionInput] = useState<string>('0.62');
   const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('oldest');
+
+  // Day detail view
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [showAllTrades, setShowAllTrades] = useState(false);
+  const [showAdvancedStats, setShowAdvancedStats] = useState(false);
 
   // Stats
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
@@ -112,7 +127,7 @@ function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     isLong: boolean; contracts: string; entryPrice: string; exitPrice: string;
-    date: string; note: string; setup: SetupTag;
+    stopLoss: string; takeProfit: string; date: string; note: string; setup: SetupTag;
   } | null>(null);
 
   // Load data on mount
@@ -165,6 +180,14 @@ function App() {
     const qty = parseInt(contracts);
     if (isNaN(entry) || isNaN(exit) || isNaN(qty) || qty <= 0) return;
 
+    const sl = parseFloat(stopLossPrice);
+    const hasSL = !isNaN(sl) && sl > 0;
+    const riskPoints = hasSL ? Math.abs(entry - sl) : undefined;
+
+    const tp = parseFloat(takeProfitPrice);
+    const hasTP = !isNaN(tp) && tp > 0;
+    const rewardPoints = hasTP ? Math.abs(tp - entry) : undefined;
+
     const pointsResult = isLong ? (exit - entry) : (entry - exit);
     const grossUSD = pointsResult * POINT_VALUE_PER_CONTRACT * qty;
     const totalCommission = commissionPerContract * qty;
@@ -176,8 +199,12 @@ function App() {
       contracts: qty,
       entryPrice: entry,
       exitPrice: exit,
+      stopLoss: hasSL ? sl : undefined,
+      takeProfit: hasTP ? tp : undefined,
       points: pointsResult,
       ticks: pointsResult / TICK_SIZE,
+      riskPoints,
+      rewardPoints,
       grossUSD,
       commission: totalCommission,
       resultUSD: netUSD,
@@ -192,8 +219,10 @@ function App() {
     setTrades(updatedTrades);
     setEntryPrice('');
     setExitPrice('');
+    setStopLossPrice('');
+    setTakeProfitPrice('');
     setTradeNote('');
-  }, [entryPrice, exitPrice, contracts, isLong, tradeDate, tradeNote, tradeSetup, commissionPerContract, trades]);
+  }, [entryPrice, exitPrice, stopLossPrice, takeProfitPrice, contracts, isLong, tradeDate, tradeNote, tradeSetup, commissionPerContract, trades]);
 
   // Enter key handler
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -232,33 +261,54 @@ function App() {
     const bestTrade = Math.max(...results);
     const worstTrade = Math.min(...results);
 
-    // Current streak
-    const sortedDesc = [...trades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    let streak = 0;
-    if (sortedDesc.length > 0) {
-      const firstIsWin = sortedDesc[0].isWin;
-      for (const t of sortedDesc) {
-        if (t.isWin === firstIsWin) streak++;
-        else break;
+    // Best day gains: sum of all winning trades per day, take the max
+    const dayMap: Record<string, number> = {};
+    for (const t of trades) {
+      if (t.isWin) {
+        dayMap[t.date] = (dayMap[t.date] || 0) + t.resultUSD;
       }
-      if (!firstIsWin) streak = -streak;
     }
+    const bestDayGains = Object.values(dayMap).length > 0 ? Math.max(...Object.values(dayMap)) : 0;
 
     const probWin = wins.length / trades.length;
     const probLoss = 1 - probWin;
+
+    // R:R using planned risk/reward if available, otherwise fallback
+    const tradesWithSL = trades.filter(t => t.riskPoints && t.riskPoints > 0);
+    let totalRR = 0;
+    let rrCount = 0;
+    let avgRR = 0;
+
+    if (tradesWithSL.length > 0) {
+      for (const t of trades) {
+        if (t.riskPoints && t.riskPoints > 0) {
+          let rr = 0;
+          if (t.rewardPoints && t.rewardPoints > 0) {
+            rr = t.rewardPoints / t.riskPoints;
+          } else {
+            rr = Math.abs(t.points) / t.riskPoints;
+          }
+          totalRR += floor1(rr);
+          rrCount++;
+        }
+      }
+      avgRR = rrCount > 0 ? (totalRR / rrCount) : 0;
+    } else {
+      avgRR = avgL !== 0 ? avgW / avgL : 0;
+    }
 
     return {
       winRate: (wins.length / trades.length) * 100,
       avgWinUSD: avgW,
       avgLossUSD: avgL,
-      avgRR: avgL !== 0 ? avgW / avgL : 0,
+      avgRR,
       totalUSD: trades.reduce((a, t) => a + t.resultUSD, 0),
       expectancyUSD: (probWin * avgW) - (probLoss * avgL),
       profitFactor: profitFactor === Infinity ? 999 : profitFactor,
       maxDrawdown: maxDD,
       bestTrade,
       worstTrade,
-      currentStreak: streak,
+      bestDayGains,
       totalTrades: trades.length,
     };
   };
@@ -300,6 +350,8 @@ function App() {
       contracts: String(t.contracts),
       entryPrice: String(t.entryPrice),
       exitPrice: String(t.exitPrice),
+      stopLoss: t.stopLoss ? String(t.stopLoss) : '',
+      takeProfit: t.takeProfit ? String(t.takeProfit) : '',
       date: t.date,
       note: t.note || '',
       setup: (t.setup as SetupTag) || 'Breakout',
@@ -318,6 +370,14 @@ function App() {
     const qty = parseInt(editForm.contracts);
     if (isNaN(entry) || isNaN(exit) || isNaN(qty) || qty <= 0) return;
 
+    const sl = parseFloat(editForm.stopLoss);
+    const hasSL = !isNaN(sl) && sl > 0;
+    const riskPoints = hasSL ? Math.abs(entry - sl) : undefined;
+
+    const tp = parseFloat(editForm.takeProfit);
+    const hasTP = !isNaN(tp) && tp > 0;
+    const rewardPoints = hasTP ? Math.abs(tp - entry) : undefined;
+
     const pointsResult = editForm.isLong ? (exit - entry) : (entry - exit);
     const grossUSD = pointsResult * POINT_VALUE_PER_CONTRACT * qty;
     const totalCommission = commissionPerContract * qty;
@@ -329,8 +389,12 @@ function App() {
       contracts: qty,
       entryPrice: entry,
       exitPrice: exit,
+      stopLoss: hasSL ? sl : undefined,
+      takeProfit: hasTP ? tp : undefined,
       points: pointsResult,
       ticks: pointsResult / TICK_SIZE,
+      riskPoints,
+      rewardPoints,
       grossUSD,
       commission: totalCommission,
       resultUSD: netUSD,
@@ -343,13 +407,17 @@ function App() {
   };
 
   const exportCSV = () => {
-    const headers = ['Date', 'Type', 'Contracts', 'Entry', 'Exit', 'Points', 'Ticks', 'Gross USD', 'Commission', 'Net USD', 'Setup', 'Note'];
+    const headers = ['Date', 'Type', 'Contracts', 'Entry', 'Exit', 'Stop Loss', 'Take Profit', 'Risk Pts', 'Reward Pts', 'Points', 'Ticks', 'Gross USD', 'Commission', 'Net USD', 'Setup', 'Note'];
     const rows = trades.map(t => [
       t.date,
       t.isLong ? 'LONG' : 'SHORT',
       t.contracts,
       t.entryPrice.toFixed(2),
       t.exitPrice.toFixed(2),
+      t.stopLoss?.toFixed(2) ?? '',
+      t.takeProfit?.toFixed(2) ?? '',
+      t.riskPoints?.toFixed(2) ?? '',
+      t.rewardPoints?.toFixed(2) ?? '',
       t.points.toFixed(2),
       t.ticks.toFixed(0),
       t.grossUSD.toFixed(2),
@@ -411,10 +479,39 @@ function App() {
     return `${day}/${month}/${year.slice(2)}`;
   };
 
+  const formatDayFull = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr + 'T12:00:00');
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  };
+
   const sortedTrades = [...trades].sort((a, b) => {
     const ta = a.createdAt || parseInt(a.id) || new Date(a.date).getTime();
     const tb = b.createdAt || parseInt(b.id) || new Date(b.date).getTime();
     return sortOrder === 'oldest' ? ta - tb : tb - ta;
+  });
+
+  // Group trades by day
+  const tradesByDay = trades.reduce<Record<string, Trade[]>>((acc, t) => {
+    if (!acc[t.date]) acc[t.date] = [];
+    acc[t.date].push(t);
+    return acc;
+  }, {});
+
+  const sortedDays = Object.keys(tradesByDay).sort((a, b) => {
+    return sortOrder === 'oldest'
+      ? new Date(a).getTime() - new Date(b).getTime()
+      : new Date(b).getTime() - new Date(a).getTime();
+  });
+
+  const selectedDayTrades = selectedDay ? (tradesByDay[selectedDay] || []) : [];
+  const selectedDayStats = selectedDay ? calculateStats(selectedDayTrades) : EMPTY_STATS;
+  const selectedDaySorted = [...selectedDayTrades].sort((a, b) => {
+    const ta = a.createdAt || parseInt(a.id) || 0;
+    const tb = b.createdAt || parseInt(b.id) || 0;
+    return ta - tb;
   });
 
   return (
@@ -449,7 +546,7 @@ function App() {
               </div>
             </div>
 
-            <div className="input-row">
+            <div className="input-row input-row-4">
               <div className="input-group">
                 <label>Entry</label>
                 <input type="number" step="0.25" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} />
@@ -457,6 +554,14 @@ function App() {
               <div className="input-group">
                 <label>Exit</label>
                 <input type="number" step="0.25" placeholder="0.00" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} />
+              </div>
+              <div className="input-group">
+                <label>SL</label>
+                <input type="number" step="0.25" placeholder="—" value={stopLossPrice} onChange={(e) => setStopLossPrice(e.target.value)} className="sl-input" />
+              </div>
+              <div className="input-group">
+                <label>TP</label>
+                <input type="number" step="0.25" placeholder="—" value={takeProfitPrice} onChange={(e) => setTakeProfitPrice(e.target.value)} className="tp-input" />
               </div>
             </div>
 
@@ -542,88 +647,110 @@ function App() {
 
           {/* Right Panel */}
           <div className="card right-panel">
-            {/* Top Hero Row */}
-            <div className="hero-row">
-              <div className={`expectancy-hero ${stats.expectancyUSD >= 0 ? 'positive' : 'negative'}`}>
-                <div className="stat-label">Mathematical Expectancy per Trade</div>
-                <div style={{ fontSize: '2rem', fontWeight: '900' }}>{stats.expectancyUSD >= 0 ? '+' : ''}{formatUSD(stats.expectancyUSD)}</div>
-                <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Net after commissions</div>
-              </div>
-              <div className="balance-hero">
-                <div className="stat-label">Net Balance</div>
-                <div style={{ fontSize: '2rem', fontWeight: '900', color: stats.totalUSD >= 0 ? '#10b981' : '#ef4444' }}>{formatUSD(stats.totalUSD)}</div>
-                <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>After commissions</div>
-              </div>
-            </div>
-
-            {/* Stats Row 1 */}
-            <div className="stats-grid">
-              <div className="stat-box" style={{ '--theme-color': '#38bdf8' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Win Rate</div>
-                <div className="stat-value" style={{ color: '#38bdf8' }}>{stats.winRate.toFixed(1)}%</div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': '#10b981' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Avg Win</div>
-                <div className="stat-value" style={{ color: '#10b981' }}>{formatUSD(stats.avgWinUSD)}</div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': '#ef4444' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Avg Loss</div>
-                <div className="stat-value" style={{ color: '#ef4444' }}>{formatUSD(stats.avgLossUSD)}</div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': '#a855f7' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> R:R</div>
-                <div className="stat-value" style={{ color: '#a855f7' }}>1:{stats.avgRR.toFixed(2)}</div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': '#6366f1' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Trades</div>
-                <div className="stat-value" style={{ color: '#6366f1' }}>{stats.totalTrades}</div>
-              </div>
-            </div>
-
-            {/* Stats Row 2: Advanced */}
-            <div className="stats-grid stats-grid-secondary">
-              <div className="stat-box" style={{ '--theme-color': '#f59e0b' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Profit Factor</div>
-                <div className="stat-value" style={{ color: '#f59e0b' }}>
-                  {stats.profitFactor >= 999 ? '∞' : stats.profitFactor.toFixed(2)}
+            {/* Stats switch: show day stats when a day is selected */}
+            {(() => {
+              const displayStats = (selectedDay && !showAllTrades) ? selectedDayStats : stats; return (<>
+                {/* Top Hero Row */}
+                <div className="hero-row">
+                  <div className={`expectancy-hero ${displayStats.expectancyUSD >= 0 ? 'positive' : 'negative'}`}>
+                    <div className="stat-label">{selectedDay ? 'Day Expectancy' : 'Mathematical Expectancy per Trade'}</div>
+                    <div style={{ fontSize: '2rem', fontWeight: '900' }}>{displayStats.expectancyUSD >= 0 ? '+' : ''}{formatUSD(displayStats.expectancyUSD)}</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>{selectedDay ? formatDayFull(selectedDay) : 'Net after commissions'}</div>
+                  </div>
+                  <div className="balance-hero">
+                    <div className="stat-label">{selectedDay ? 'Day P&L' : 'Net Balance'}</div>
+                    <div style={{ fontSize: '2rem', fontWeight: '900', color: displayStats.totalUSD >= 0 ? '#10b981' : '#ef4444' }}>{formatUSD(displayStats.totalUSD)}</div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>{selectedDay ? `${displayStats.totalTrades} trade${displayStats.totalTrades !== 1 ? 's' : ''}` : 'After commissions'}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': '#f43f5e' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Max Drawdown</div>
-                <div className="stat-value" style={{ color: '#f43f5e' }}>{formatUSD(stats.maxDrawdown)}</div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': '#2dd4bf' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Best Trade</div>
-                <div className="stat-value" style={{ color: '#2dd4bf' }}>{formatUSD(stats.bestTrade)}</div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': '#ef4444' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Worst Trade</div>
-                <div className="stat-value" style={{ color: '#ef4444' }}>{formatUSD(stats.worstTrade)}</div>
-              </div>
-              <div className="stat-box" style={{ '--theme-color': stats.currentStreak >= 0 ? '#10b981' : '#ef4444' } as React.CSSProperties}>
-                <div className="stat-label"><div className="stat-pulse-dot"></div> Streak</div>
-                <div className="stat-value" style={{ color: stats.currentStreak >= 0 ? '#10b981' : '#ef4444' }}>
-                  {stats.currentStreak > 0 ? `${stats.currentStreak}W 🔥` : stats.currentStreak < 0 ? `${Math.abs(stats.currentStreak)}L` : '—'}
-                </div>
-              </div>
-            </div>
 
-            {/* Charts Row */}
-            <div className="charts-row">
-              <Charts trades={trades} />
-              <div className="mini-chart-box" style={{ flex: 2 }}>
-                <span className="mini-chart-title">Equity Curve</span>
-                <EquityCurve trades={trades} inline />
-              </div>
-              <div className="mini-chart-box" style={{ flex: 2 }}>
-                <span className="mini-chart-title">Drawdown</span>
-                <DrawdownChart trades={sortedTrades} />
-              </div>
-            </div>
+                {/* Stats Row 1 */}
+                <div className="stats-grid">
+                  <div className="stat-box" style={{ '--theme-color': '#38bdf8' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Win Rate</div>
+                    <div className="stat-value" style={{ color: '#38bdf8' }}>{displayStats.winRate.toFixed(1)}%</div>
+                  </div>
+                  <div className="stat-box" style={{ '--theme-color': '#10b981' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Avg Win</div>
+                    <div className="stat-value" style={{ color: '#10b981' }}>{formatUSD(displayStats.avgWinUSD)}</div>
+                  </div>
+                  <div className="stat-box" style={{ '--theme-color': '#ef4444' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Avg Loss</div>
+                    <div className="stat-value" style={{ color: '#ef4444' }}>{formatUSD(displayStats.avgLossUSD)}</div>
+                  </div>
+                  <div className="stat-box" style={{ '--theme-color': '#a855f7' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> R:R</div>
+                    <div className="stat-value" style={{ color: '#a855f7' }}>1:{floor2Str(displayStats.avgRR)}</div>
+                  </div>
+                  <div className="stat-box" style={{ '--theme-color': '#6366f1' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Trades</div>
+                    <div className="stat-value" style={{ color: '#6366f1' }}>{displayStats.totalTrades}</div>
+                  </div>
+                </div>
+
+                {/* Toggle button for advanced stats */}
+                <button className="btn-toggle-stats" onClick={() => setShowAdvancedStats(!showAdvancedStats)}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`toggle-chevron ${showAdvancedStats ? 'open' : ''}`}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                  {showAdvancedStats ? 'Hide' : 'More'} Stats
+                </button>
+
+                {/* Stats Row 2: Advanced (collapsible) */}
+                <div className={`stats-collapsible ${showAdvancedStats ? 'expanded' : ''}`}>
+                  <div className="stats-grid stats-grid-secondary">
+                    <div className="stat-box" style={{ '--theme-color': '#f59e0b' } as React.CSSProperties}>
+                      <div className="stat-label"><div className="stat-pulse-dot"></div> Profit Factor</div>
+                      <div className="stat-value" style={{ color: '#f59e0b' }}>
+                        {displayStats.profitFactor >= 999 ? '∞' : displayStats.profitFactor.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="stat-box" style={{ '--theme-color': '#f43f5e' } as React.CSSProperties}>
+                      <div className="stat-label"><div className="stat-pulse-dot"></div> Max Drawdown</div>
+                      <div className="stat-value" style={{ color: '#f43f5e' }}>{formatUSD(displayStats.maxDrawdown)}</div>
+                    </div>
+                    <div className="stat-box" style={{ '--theme-color': '#2dd4bf' } as React.CSSProperties}>
+                      <div className="stat-label"><div className="stat-pulse-dot"></div> Best Trade</div>
+                      <div className="stat-value" style={{ color: '#2dd4bf' }}>{formatUSD(displayStats.bestTrade)}</div>
+                    </div>
+                    <div className="stat-box" style={{ '--theme-color': '#ef4444' } as React.CSSProperties}>
+                      <div className="stat-label"><div className="stat-pulse-dot"></div> Worst Trade</div>
+                      <div className="stat-value" style={{ color: '#ef4444' }}>{formatUSD(displayStats.worstTrade)}</div>
+                    </div>
+                    <div className="stat-box" style={{ '--theme-color': '#10b981' } as React.CSSProperties}>
+                      <div className="stat-label"><div className="stat-pulse-dot"></div> Best Day</div>
+                      <div className="stat-value" style={{ color: '#10b981' }}>
+                        {displayStats.bestDayGains > 0 ? formatUSD(displayStats.bestDayGains) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Charts Row */}
+                <div className="charts-row">
+                  <Charts trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} />
+                  <div className="mini-chart-box" style={{ flex: 2 }}>
+                    <span className="mini-chart-title">Equity Curve</span>
+                    <EquityCurve trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} inline />
+                  </div>
+                  <div className="mini-chart-box" style={{ flex: 2 }}>
+                    <span className="mini-chart-title">Drawdown</span>
+                    <DrawdownChart trades={(selectedDay && !showAllTrades) ? selectedDaySorted : sortedTrades} />
+                  </div>
+                </div>
+              </>);
+            })()}
 
             <div className="trades-container">
               <div className="trades-header">
-                <h3>Micro E-mini S&P 500 Trade Log</h3>
+                <h3>
+                  {(selectedDay || showAllTrades) ? (
+                    <button className="btn-back-day" onClick={() => { setSelectedDay(null); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                    </button>
+                  ) : null}
+                  {showAllTrades ? 'All Trades' : selectedDay ? formatDayFull(selectedDay) : 'Micro E-mini S&P 500 Trade Log'}
+                </h3>
                 <div style={{ display: 'flex', gap: '0.4rem' }}>
                   <button
                     className="btn-export"
@@ -632,14 +759,19 @@ function App() {
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       {sortOrder === 'newest' ? (
-                        <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></> // Arrow Up
+                        <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>
                       ) : (
-                        <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></> // Arrow Down
+                        <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></>
                       )}
                     </svg>
                     {sortOrder === 'newest' ? 'Newest' : 'Oldest'} First
                   </button>
-
+                  {!selectedDay && !showAllTrades && trades.length > 0 && (
+                    <button className="btn-export btn-all-trades" onClick={() => { setShowAllTrades(true); setEditingId(null); setExpandedNote(null); }} title="View all trades">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+                      All
+                    </button>
+                  )}
                   {trades.length > 0 && (
                     <button className="btn-export" onClick={exportCSV} title="Export CSV">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
@@ -648,102 +780,299 @@ function App() {
                   )}
                 </div>
               </div>
-              <div className="trades-list">
-                {sortedTrades.map(t => (
-                  <div key={t.id} className={`trade-row ${expandedNote === t.id ? 'expanded' : ''}`}>
-                    <div className="trade-row-main">
-                      <span className="trade-date-col">{formatDateLabel(t.date)}</span>
-                      <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
-                        {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
-                      </span>
-                      <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
-                      {t.setup && <span className="trade-setup-badge">{t.setup}</span>}
-                      <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
-                        {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
-                      </span>
-                      <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
-                      <span className="trade-actions">
-                        {(t.note) && (
-                          <button className="screenshot-btn" onClick={() => setExpandedNote(expandedNote === t.id ? null : t.id)} title="View note">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
-                          </button>
-                        )}
-                        {t.screenshotFile ? (
-                          <>
-                            <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="View screenshot">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                            </button>
-                            <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Change image">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
-                            </button>
-                          </>
-                        ) : (
-                          <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Attach image">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
-                          </button>
-                        )}
-                        <button className="edit-btn" onClick={() => startEdit(t)} title="Edit trade">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
-                        </button>
-                        <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
-                      </span>
-                    </div>
-                    {expandedNote === t.id && t.note && (
-                      <div className="trade-note-expanded">{t.note}</div>
-                    )}
-                    {editingId === t.id && editForm && (
-                      <div className="trade-edit-form">
-                        <div className="edit-row">
-                          <div className="edit-field">
-                            <label>Type</label>
-                            <div className="outcome-selector">
-                              <button className={`outcome-btn ${editForm.isLong ? 'active' : ''}`} style={editForm.isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setEditForm({ ...editForm, isLong: true })}>LONG</button>
-                              <button className={`outcome-btn ${!editForm.isLong ? 'active' : ''}`} style={!editForm.isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setEditForm({ ...editForm, isLong: false })}>SHORT</button>
-                            </div>
-                          </div>
-                          <div className="edit-field">
-                            <label>Date</label>
-                            <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
-                          </div>
-                          <div className="edit-field">
-                            <label>Contracts</label>
-                            <input type="number" value={editForm.contracts} onChange={e => setEditForm({ ...editForm, contracts: e.target.value })} />
-                          </div>
+
+              {/* === DAY CARDS GRID VIEW === */}
+              {!selectedDay && !showAllTrades && (
+                <div className="day-cards-grid">
+                  {sortedDays.map(day => {
+                    const dayTrades = tradesByDay[day];
+                    const dayPnL = dayTrades.reduce((sum, t) => sum + t.resultUSD, 0);
+                    const dayWins = dayTrades.filter(t => t.isWin).length;
+                    const dayWinRate = (dayWins / dayTrades.length) * 100;
+                    const isProfit = dayPnL >= 0;
+                    const dayPoints = dayTrades.reduce((sum, t) => sum + t.points, 0);
+
+                    return (
+                      <div
+                        key={day}
+                        className={`day-card ${isProfit ? 'day-card-profit' : 'day-card-loss'}`}
+                        onClick={() => { setSelectedDay(day); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}
+                      >
+                        <div className="day-card-header">
+                          <span className="day-card-date">{formatDateLabel(day)}</span>
+                          <span className={`day-card-badge ${isProfit ? 'badge-profit' : 'badge-loss'}`}>
+                            {isProfit ? '▲' : '▼'}
+                          </span>
                         </div>
-                        <div className="edit-row">
-                          <div className="edit-field">
-                            <label>Entry</label>
-                            <input type="number" step="0.25" value={editForm.entryPrice} onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })} />
-                          </div>
-                          <div className="edit-field">
-                            <label>Exit</label>
-                            <input type="number" step="0.25" value={editForm.exitPrice} onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })} />
-                          </div>
-                          <div className="edit-field">
-                            <label>Setup</label>
-                            <select value={editForm.setup} onChange={e => setEditForm({ ...editForm, setup: e.target.value as SetupTag })}>
-                              {SETUP_TAGS.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-                            </select>
-                          </div>
+                        <div className="day-card-pnl" style={{ color: isProfit ? '#10b981' : '#ef4444' }}>
+                          {isProfit ? '+' : ''}{formatUSD(dayPnL)}
                         </div>
-                        <div className="edit-row">
-                          <div className="edit-field" style={{ flex: 1 }}>
-                            <label>Note</label>
-                            <input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="Entry reason, observations..." />
-                          </div>
+                        <div className="day-card-meta">
+                          <span>{dayTrades.length} trade{dayTrades.length !== 1 ? 's' : ''}</span>
+                          <span className="day-card-separator">·</span>
+                          <span style={{ color: dayWinRate >= 50 ? '#34d399' : '#f87171' }}>{dayWinRate.toFixed(0)}% WR</span>
                         </div>
-                        <div className="edit-actions">
-                          <button className="btn-edit-save" onClick={saveEdit}>Save Changes</button>
-                          <button className="btn-edit-cancel" onClick={cancelEdit}>Cancel</button>
+                        <div className="day-card-pts">
+                          {dayPoints > 0 ? '+' : ''}{dayPoints.toFixed(2)} pts
+                        </div>
+                        <div className="day-card-bar">
+                          <div
+                            className="day-card-bar-fill"
+                            style={{
+                              width: `${dayWinRate}%`,
+                              background: isProfit
+                                ? 'linear-gradient(90deg, #10b981, #34d399)'
+                                : 'linear-gradient(90deg, #ef4444, #f87171)',
+                            }}
+                          />
                         </div>
                       </div>
-                    )}
+                    );
+                  })}
+                  {trades.length === 0 && (
+                    <div style={{ textAlign: 'center', color: '#475569', marginTop: '2rem', fontSize: '0.8rem', gridColumn: '1 / -1' }}>
+                      No trades logged yet.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* === ALL TRADES VIEW === */}
+              {showAllTrades && !selectedDay && (
+                <div className="day-detail-view">
+                  <div className="trades-list">
+                    {sortedTrades.map(t => (
+                      <div key={t.id} className={`trade-row ${expandedNote === t.id ? 'expanded' : ''}`}>
+                        <div className="trade-row-main">
+                          <span className="trade-date-col">{formatDateLabel(t.date)}</span>
+                          <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
+                            {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
+                          </span>
+                          <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
+                          {t.setup && <span className="trade-setup-badge">{t.setup}</span>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                            {t.riskPoints && t.rewardPoints ? (
+                              <span className="trade-rr-badge" title={`Planned R:R (TP/SL) | Actual R:R 1:${floor1Str(Math.abs(t.points) / t.riskPoints)}`}>
+                                Plan 1:{floor1Str(t.rewardPoints / t.riskPoints)}
+                              </span>
+                            ) : t.riskPoints ? (
+                              <span className="trade-rr-badge" title="Risk:Reward">1:{floor1Str(Math.abs(t.points) / t.riskPoints)}</span>
+                            ) : null}
+                            <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
+                              {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
+                            </span>
+                          </div>
+                          <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
+                          <span className="trade-actions">
+                            {(t.note) && (
+                              <button className="screenshot-btn" onClick={() => setExpandedNote(expandedNote === t.id ? null : t.id)} title="View note">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                              </button>
+                            )}
+                            {t.screenshotFile ? (
+                              <>
+                                <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="View screenshot">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                </button>
+                                <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Change image">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                                </button>
+                              </>
+                            ) : (
+                              <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Attach image">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                              </button>
+                            )}
+                            <button className="edit-btn" onClick={() => startEdit(t)} title="Edit trade">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+                            </button>
+                            <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
+                          </span>
+                        </div>
+                        {expandedNote === t.id && t.note && (
+                          <div className="trade-note-expanded">{t.note}</div>
+                        )}
+                        {editingId === t.id && editForm && (
+                          <div className="trade-edit-form">
+                            <div className="edit-row">
+                              <div className="edit-field">
+                                <label>Type</label>
+                                <div className="outcome-selector">
+                                  <button className={`outcome-btn ${editForm.isLong ? 'active' : ''}`} style={editForm.isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setEditForm({ ...editForm, isLong: true })}>LONG</button>
+                                  <button className={`outcome-btn ${!editForm.isLong ? 'active' : ''}`} style={!editForm.isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setEditForm({ ...editForm, isLong: false })}>SHORT</button>
+                                </div>
+                              </div>
+                              <div className="edit-field">
+                                <label>Date</label>
+                                <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
+                              </div>
+                              <div className="edit-field">
+                                <label>Contracts</label>
+                                <input type="number" value={editForm.contracts} onChange={e => setEditForm({ ...editForm, contracts: e.target.value })} />
+                              </div>
+                            </div>
+                            <div className="edit-row">
+                              <div className="edit-field">
+                                <label>Entry</label>
+                                <input type="number" step="0.25" value={editForm.entryPrice} onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })} />
+                              </div>
+                              <div className="edit-field">
+                                <label>Exit</label>
+                                <input type="number" step="0.25" value={editForm.exitPrice} onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })} />
+                              </div>
+                              <div className="edit-field">
+                                <label>SL</label>
+                                <input type="number" step="0.25" value={editForm.stopLoss} onChange={e => setEditForm({ ...editForm, stopLoss: e.target.value })} placeholder="—" />
+                              </div>
+                              <div className="edit-field">
+                                <label>TP</label>
+                                <input type="number" step="0.25" value={editForm.takeProfit} onChange={e => setEditForm({ ...editForm, takeProfit: e.target.value })} placeholder="—" />
+                              </div>
+                            </div>
+                            <div className="edit-row">
+                              <div className="edit-field">
+                                <label>Setup</label>
+                                <select value={editForm.setup} onChange={e => setEditForm({ ...editForm, setup: e.target.value as SetupTag })}>
+                                  {SETUP_TAGS.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="edit-row">
+                              <div className="edit-field" style={{ flex: 1 }}>
+                                <label>Note</label>
+                                <input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="Entry reason, observations..." />
+                              </div>
+                            </div>
+                            <div className="edit-actions">
+                              <button className="btn-edit-save" onClick={saveEdit}>Save Changes</button>
+                              <button className="btn-edit-cancel" onClick={cancelEdit}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {trades.length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#475569', marginTop: '2rem', fontSize: '0.8rem' }}>No trades logged yet.</div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* === DAY DETAIL VIEW === */}
+              {selectedDay && (
+                <div className="day-detail-view">
+                  {/* Trades list for the day */}
+                  <div className="trades-list">
+                    {selectedDaySorted.map((t, idx) => (
+                      <div key={t.id} className={`trade-row ${expandedNote === t.id ? 'expanded' : ''}`}>
+                        <div className="trade-row-main">
+                          <span className="trade-index">#{idx + 1}</span>
+                          <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
+                            {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
+                          </span>
+                          <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
+                          {t.setup && <span className="trade-setup-badge">{t.setup}</span>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                            {t.riskPoints && t.rewardPoints ? (
+                              <span className="trade-rr-badge" title={`Planned R:R (TP/SL) | Actual R:R 1:${floor1Str(Math.abs(t.points) / t.riskPoints)}`}>
+                                Plan 1:{floor1Str(t.rewardPoints / t.riskPoints)}
+                              </span>
+                            ) : t.riskPoints ? (
+                              <span className="trade-rr-badge" title="Risk:Reward">1:{floor1Str(Math.abs(t.points) / t.riskPoints)}</span>
+                            ) : null}
+                            <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
+                              {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
+                            </span>
+                          </div>
+                          <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
+                          <span className="trade-actions">
+                            {(t.note) && (
+                              <button className="screenshot-btn" onClick={() => setExpandedNote(expandedNote === t.id ? null : t.id)} title="View note">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                              </button>
+                            )}
+                            {t.screenshotFile ? (
+                              <>
+                                <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="View screenshot">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                </button>
+                                <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Change image">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                                </button>
+                              </>
+                            ) : (
+                              <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Attach image">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                              </button>
+                            )}
+                            <button className="edit-btn" onClick={() => startEdit(t)} title="Edit trade">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+                            </button>
+                            <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
+                          </span>
+                        </div>
+                        {expandedNote === t.id && t.note && (
+                          <div className="trade-note-expanded">{t.note}</div>
+                        )}
+                        {editingId === t.id && editForm && (
+                          <div className="trade-edit-form">
+                            <div className="edit-row">
+                              <div className="edit-field">
+                                <label>Type</label>
+                                <div className="outcome-selector">
+                                  <button className={`outcome-btn ${editForm.isLong ? 'active' : ''}`} style={editForm.isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setEditForm({ ...editForm, isLong: true })}>LONG</button>
+                                  <button className={`outcome-btn ${!editForm.isLong ? 'active' : ''}`} style={!editForm.isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setEditForm({ ...editForm, isLong: false })}>SHORT</button>
+                                </div>
+                              </div>
+                              <div className="edit-field">
+                                <label>Date</label>
+                                <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
+                              </div>
+                              <div className="edit-field">
+                                <label>Contracts</label>
+                                <input type="number" value={editForm.contracts} onChange={e => setEditForm({ ...editForm, contracts: e.target.value })} />
+                              </div>
+                            </div>
+                            <div className="edit-row">
+                              <div className="edit-field">
+                                <label>Entry</label>
+                                <input type="number" step="0.25" value={editForm.entryPrice} onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })} />
+                              </div>
+                              <div className="edit-field">
+                                <label>Exit</label>
+                                <input type="number" step="0.25" value={editForm.exitPrice} onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })} />
+                              </div>
+                              <div className="edit-field">
+                                <label>SL</label>
+                                <input type="number" step="0.25" value={editForm.stopLoss} onChange={e => setEditForm({ ...editForm, stopLoss: e.target.value })} placeholder="—" />
+                              </div>
+                              <div className="edit-field">
+                                <label>TP</label>
+                                <input type="number" step="0.25" value={editForm.takeProfit} onChange={e => setEditForm({ ...editForm, takeProfit: e.target.value })} placeholder="—" />
+                              </div>
+                            </div>
+                            <div className="edit-row">
+                              <div className="edit-field">
+                                <label>Setup</label>
+                                <select value={editForm.setup} onChange={e => setEditForm({ ...editForm, setup: e.target.value as SetupTag })}>
+                                  {SETUP_TAGS.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="edit-row">
+                              <div className="edit-field" style={{ flex: 1 }}>
+                                <label>Note</label>
+                                <input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="Entry reason, observations..." />
+                              </div>
+                            </div>
+                            <div className="edit-actions">
+                              <button className="btn-edit-save" onClick={saveEdit}>Save Changes</button>
+                              <button className="btn-edit-cancel" onClick={cancelEdit}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
