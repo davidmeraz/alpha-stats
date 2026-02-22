@@ -332,6 +332,23 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
+  const exportDB = async () => {
+    if (!window.ipcRenderer) return;
+    await window.ipcRenderer.invoke('export-db');
+  };
+
+  const importDB = async () => {
+    if (!window.ipcRenderer) return;
+    const result = await window.ipcRenderer.invoke('import-db');
+    if (result.success) {
+      if (result.trades) setTrades(result.trades);
+      if (result.settings) {
+        setCommissionPerContract(result.settings.commissionPerContract ?? 0.62);
+        setCommissionInput(String(result.settings.commissionPerContract ?? 0.62));
+      }
+    }
+  };
+
   const getContractsQty = () => {
     const qty = parseInt(contracts);
     return isNaN(qty) ? 0 : qty;
@@ -468,6 +485,17 @@ function App() {
             <div style={{ fontSize: '0.65rem', color: '#94a3b8' }}>NET BALANCE</div>
             <div style={{ fontSize: '1.1rem', fontWeight: '850', color: stats.totalUSD >= 0 ? '#10b981' : '#ef4444' }}>{formatUSD(stats.totalUSD)}</div>
             <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '2px' }}>After commissions</div>
+          </div>
+
+          <div className="db-actions">
+            <button className="btn-db" onClick={exportDB} title="Export backup">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+              Export
+            </button>
+            <button className="btn-db" onClick={importDB} title="Import backup">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+              Import
+            </button>
           </div>
         </div>
 

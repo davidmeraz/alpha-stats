@@ -144,6 +144,62 @@ ipcMain.handle("delete-screenshot", async (_, filename) => {
     return { success: false, error };
   }
 });
+ipcMain.handle("export-db", async () => {
+  try {
+    const result = await dialog.showSaveDialog({
+      title: "Export Trade Database",
+      defaultPath: `alpha-stats-backup_${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.json`,
+      filters: [{ name: "JSON Database", extensions: ["json"] }]
+    });
+    if (result.canceled || !result.filePath) {
+      return { success: false, canceled: true };
+    }
+    let trades = [];
+    let settings = {};
+    if (fs.existsSync(DATA_PATH)) {
+      const data = await fs.promises.readFile(DATA_PATH, "utf-8");
+      trades = JSON.parse(data);
+    }
+    if (fs.existsSync(SETTINGS_PATH)) {
+      const data = await fs.promises.readFile(SETTINGS_PATH, "utf-8");
+      settings = JSON.parse(data);
+    }
+    const bundle = { version: 1, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), trades, settings };
+    await fs.promises.writeFile(result.filePath, JSON.stringify(bundle, null, 2), "utf-8");
+    return { success: true, path: result.filePath };
+  } catch (error) {
+    console.error("Failed to export database:", error);
+    return { success: false, error };
+  }
+});
+ipcMain.handle("import-db", async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      title: "Import Trade Database",
+      properties: ["openFile"],
+      filters: [{ name: "JSON Database", extensions: ["json"] }]
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    const data = await fs.promises.readFile(result.filePaths[0], "utf-8");
+    const parsed = JSON.parse(data);
+    if (parsed.version && parsed.trades) {
+      await fs.promises.writeFile(DATA_PATH, JSON.stringify(parsed.trades, null, 2), "utf-8");
+      if (parsed.settings) {
+        await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(parsed.settings, null, 2), "utf-8");
+      }
+      return { success: true, trades: parsed.trades, settings: parsed.settings || null };
+    } else if (Array.isArray(parsed)) {
+      await fs.promises.writeFile(DATA_PATH, JSON.stringify(parsed, null, 2), "utf-8");
+      return { success: true, trades: parsed, settings: null };
+    }
+    return { success: false, error: "Invalid file format" };
+  } catch (error) {
+    console.error("Failed to import database:", error);
+    return { success: false, error };
+  }
+});
 app.whenReady().then(createWindow);
 export {
   MAIN_DIST,
