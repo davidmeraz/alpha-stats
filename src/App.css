@@ -46,16 +46,73 @@ body {
 #root {
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom Title Bar */
+.title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 32px;
+  background: transparent;
+  -webkit-app-region: drag;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.title-bar-title {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.window-controls {
+  display: flex;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.window-ctrl-btn {
+  background: transparent;
+  border: none;
+  width: 46px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.window-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.window-ctrl-close:hover {
+  background: #e81123 !important;
+  color: white !important;
 }
 
 .app-container {
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   width: 100%;
-  height: 100%;
-  padding: 1rem;
+  flex: 1;
+  padding: 0.5rem 1rem 1rem 1rem;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .main-layout {
@@ -235,32 +292,52 @@ input[type="number"] {
   gap: 1px;
 }
 
+@keyframes pulsePrimary {
+  0% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5);
+  }
+
+  70% {
+    box-shadow: 0 0 0 15px rgba(56, 189, 248, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+  }
+}
+
 .btn-primary {
   background: linear-gradient(135deg, #38bdf8, #2563eb);
   border: none;
-  border-radius: 12px;
-  padding: 0.65rem;
+  width: 85%;
+  max-width: 260px;
+  height: 64px;
+  border-radius: 32px;
+  margin: 1.5rem auto;
   color: #fff;
-  font-weight: 800;
-  font-size: 0.9rem;
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+  animation: pulsePrimary 2s infinite;
+  position: relative;
+  gap: 12px;
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.6);
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 8px 25px rgba(56, 189, 248, 0.6);
+  animation: none;
 }
 
 .btn-primary:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  animation: none;
+  box-shadow: none;
 }
 
 /* Settings Button */
@@ -345,6 +422,13 @@ input[type="number"] {
   box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.05);
 }
 
+.left-panel-bottom {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .db-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -401,12 +485,44 @@ input[type="number"] {
 }
 
 .stat-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   font-size: 0.65rem;
   color: #cbd5e1;
   text-transform: none;
-  font-weight: 400;
+  font-weight: 500;
   margin-bottom: 2px;
   letter-spacing: 0.01em;
+}
+
+@keyframes pulseDot {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 var(--theme-color);
+    opacity: 0.8;
+  }
+
+  70% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 6px rgba(0, 0, 0, 0);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+    opacity: 0.8;
+  }
+}
+
+.stat-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--theme-color);
+  animation: pulseDot 2s infinite ease-out;
 }
 
 .stat-value {

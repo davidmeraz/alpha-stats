@@ -14,9 +14,10 @@ function createWindow() {
   win = new BrowserWindow({
     width: Math.floor(width * 0.8),
     height: Math.floor(height * 0.86),
-    resizable: false,
-    maximizable: false,
-    movable: false,
+    resizable: true,
+    maximizable: true,
+    movable: true,
+    frame: false,
     center: true,
     show: false,
     autoHideMenuBar: true,
@@ -50,6 +51,19 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+ipcMain.on("window-minimize", () => {
+  win == null ? void 0 : win.minimize();
+});
+ipcMain.on("window-maximize", () => {
+  if (win == null ? void 0 : win.isMaximized()) {
+    win == null ? void 0 : win.restore();
+  } else {
+    win == null ? void 0 : win.maximize();
+  }
+});
+ipcMain.on("window-close", () => {
+  win == null ? void 0 : win.close();
 });
 const DATA_PATH = path.join(app.getPath("userData"), "trades.json");
 const SETTINGS_PATH = path.join(app.getPath("userData"), "settings.json");

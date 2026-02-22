@@ -21,9 +21,10 @@ function createWindow() {
   win = new BrowserWindow({
     width: Math.floor(width * 0.80),
     height: Math.floor(height * 0.86),
-    resizable: false,
-    maximizable: false,
-    movable: false,
+    resizable: true,
+    maximizable: true,
+    movable: true,
+    frame: false,
     center: true,
     show: false,
     autoHideMenuBar: true,
@@ -62,6 +63,21 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow()
   }
+})
+
+// --- Window Controls IPC ---
+ipcMain.on('window-minimize', () => {
+  win?.minimize()
+})
+ipcMain.on('window-maximize', () => {
+  if (win?.isMaximized()) {
+    win?.restore()
+  } else {
+    win?.maximize()
+  }
+})
+ipcMain.on('window-close', () => {
+  win?.close()
 })
 
 // --- Data paths ---

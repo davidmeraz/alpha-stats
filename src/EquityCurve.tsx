@@ -8,9 +8,10 @@ interface Trade {
 
 interface EquityCurveProps {
     trades: Trade[];
+    inline?: boolean;
 }
 
-function EquityCurve({ trades }: EquityCurveProps) {
+function EquityCurve({ trades, inline }: EquityCurveProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
@@ -137,6 +138,15 @@ function EquityCurve({ trades }: EquityCurveProps) {
         }
 
     }, [trades]);
+
+    if (inline) {
+        return (
+            <canvas
+                ref={canvasRef}
+                style={{ width: '100%', height: '100px', display: 'block' }}
+            />
+        );
+    }
 
     return (
         <div className="equity-curve-container">
