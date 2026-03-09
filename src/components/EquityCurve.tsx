@@ -1,10 +1,5 @@
 import { useRef, useEffect } from 'react'
-
-interface Trade {
-    id: string;
-    resultUSD: number;
-    date: string;
-}
+import { Trade } from '../types'
 
 interface EquityCurveProps {
     trades: Trade[];

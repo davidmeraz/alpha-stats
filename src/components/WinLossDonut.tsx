@@ -1,17 +1,11 @@
 import { useRef, useEffect } from 'react'
+import { Trade } from '../types'
 
-interface Trade {
-    id: string;
-    resultUSD: number;
-    isWin: boolean;
-    date: string;
-}
-
-interface ChartsProps {
+interface WinLossDonutProps {
     trades: Trade[];
 }
 
-function Charts({ trades }: ChartsProps) {
+function WinLossDonut({ trades }: WinLossDonutProps) {
     const donutRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
@@ -83,4 +77,4 @@ function Charts({ trades }: ChartsProps) {
     );
 }
 
-export default Charts;
+export default WinLossDonut;

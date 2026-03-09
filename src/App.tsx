@@ -1,95 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import EquityCurve from './EquityCurve'
-import Charts from './Charts'
-import DrawdownChart from './DrawdownChart'
+import EquityCurve from './components/EquityCurve'
+import WinLossDonut from './components/WinLossDonut'
+import DrawdownChart from './components/DrawdownChart'
 import './App.css'
 
-const POINT_VALUE_PER_CONTRACT = 5;
-const TICK_SIZE = 0.25;
+import { Trade, Stats, SetupTag, SETUP_TAGS } from './types';
+import { POINT_VALUE_PER_CONTRACT, TICK_SIZE, EMPTY_STATS } from './constants';
+import { floor1Str, floor2Str, formatUSD, formatDayFull, formatDateLabel } from './utils/formatters';
+import { calculateStats } from './utils/calculations';
+import { TitleBar } from './components/TitleBar';
 
-const floor1Str = (val: number) => (Math.floor(val * 10) / 10).toFixed(1);
-const floor1 = (val: number) => Math.floor(val * 10) / 10;
-const floor2Str = (val: number) => (Math.floor(val * 100) / 100).toFixed(2);
-
-const SETUP_TAGS = ['Breakout', 'Pullback', 'Range', 'Reversal', 'Scalp', 'Trend', 'Other'] as const;
-type SetupTag = typeof SETUP_TAGS[number];
-
-interface Trade {
-  id: string;
-  isLong: boolean;
-  contracts: number;
-  entryPrice: number;
-  exitPrice: number;
-  stopLoss?: number;
-  takeProfit?: number;
-  points: number;
-  ticks: number;
-  riskPoints?: number;
-  rewardPoints?: number;
-  grossUSD: number;
-  commission: number;
-  resultUSD: number;
-  isWin: boolean;
-  date: string;
-  createdAt?: number;
-  screenshotFile?: string;
-  note?: string;
-  setup?: SetupTag;
-}
-
-interface Stats {
-  winRate: number;
-  avgWinUSD: number;
-  avgLossUSD: number;
-  avgRR: number;
-  totalUSD: number;
-  expectancyUSD: number;
-  profitFactor: number;
-  maxDrawdown: number;
-  bestTrade: number;
-  worstTrade: number;
-  bestDayGains: number;
-  totalTrades: number;
-}
-
-const EMPTY_STATS: Stats = {
-  winRate: 0, avgWinUSD: 0, avgLossUSD: 0, avgRR: 0,
-  totalUSD: 0, expectancyUSD: 0, profitFactor: 0,
-  maxDrawdown: 0, bestTrade: 0, worstTrade: 0,
-  bestDayGains: 0, totalTrades: 0,
-};
-
-function TitleBar() {
-  const handleMinimize = () => {
-    if (window.ipcRenderer) window.ipcRenderer.send('window-minimize');
-  };
-  const handleMaximize = () => {
-    if (window.ipcRenderer) window.ipcRenderer.send('window-maximize');
-  };
-  const handleClose = () => {
-    if (window.ipcRenderer) window.ipcRenderer.send('window-close');
-  };
-
-  return (
-    <div className="title-bar">
-      <div className="title-bar-title">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
-        ALPHA STATS
-      </div>
-      <div className="window-controls">
-        <button className="window-ctrl-btn" onClick={handleMinimize} tabIndex={-1}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="12" x2="20" y2="12" /></svg>
-        </button>
-        <button className="window-ctrl-btn" onClick={handleMaximize} tabIndex={-1}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /></svg>
-        </button>
-        <button className="window-ctrl-btn window-ctrl-close" onClick={handleClose} tabIndex={-1}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function App() {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -112,6 +32,11 @@ function App() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showAllTrades, setShowAllTrades] = useState(false);
   const [showAdvancedStats, setShowAdvancedStats] = useState(false);
+  const [showCharts, setShowCharts] = useState(true);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
 
   // Stats
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
@@ -232,86 +157,6 @@ function App() {
     }
   }, [addTrade, entryPrice, exitPrice]);
 
-  const calculateStats = (trades: Trade[]): Stats => {
-    if (trades.length === 0) return EMPTY_STATS;
-
-    const wins = trades.filter(t => t.isWin);
-    const losses = trades.filter(t => !t.isWin);
-
-    const avgW = wins.length > 0 ? wins.reduce((a, t) => a + t.resultUSD, 0) / wins.length : 0;
-    const avgL = losses.length > 0 ? Math.abs(losses.reduce((a, t) => a + t.resultUSD, 0) / losses.length) : 0;
-    const totalWins = wins.reduce((a, t) => a + t.resultUSD, 0);
-    const totalLosses = Math.abs(losses.reduce((a, t) => a + t.resultUSD, 0));
-
-    // Profit Factor
-    const profitFactor = totalLosses > 0 ? totalWins / totalLosses : totalWins > 0 ? Infinity : 0;
-
-    // Max Drawdown (from equity peak)
-    const sorted = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    let peak = 0, maxDD = 0, cumulative = 0;
-    for (const t of sorted) {
-      cumulative += t.resultUSD;
-      if (cumulative > peak) peak = cumulative;
-      const dd = peak - cumulative;
-      if (dd > maxDD) maxDD = dd;
-    }
-
-    // Best / Worst trade
-    const results = trades.map(t => t.resultUSD);
-    const bestTrade = Math.max(...results);
-    const worstTrade = Math.min(...results);
-
-    // Best day gains: sum of all winning trades per day, take the max
-    const dayMap: Record<string, number> = {};
-    for (const t of trades) {
-      if (t.isWin) {
-        dayMap[t.date] = (dayMap[t.date] || 0) + t.resultUSD;
-      }
-    }
-    const bestDayGains = Object.values(dayMap).length > 0 ? Math.max(...Object.values(dayMap)) : 0;
-
-    const probWin = wins.length / trades.length;
-    const probLoss = 1 - probWin;
-
-    // R:R using planned risk/reward if available, otherwise fallback
-    const tradesWithSL = trades.filter(t => t.riskPoints && t.riskPoints > 0);
-    let totalRR = 0;
-    let rrCount = 0;
-    let avgRR = 0;
-
-    if (tradesWithSL.length > 0) {
-      for (const t of trades) {
-        if (t.riskPoints && t.riskPoints > 0) {
-          let rr = 0;
-          if (t.rewardPoints && t.rewardPoints > 0) {
-            rr = t.rewardPoints / t.riskPoints;
-          } else {
-            rr = Math.abs(t.points) / t.riskPoints;
-          }
-          totalRR += floor1(rr);
-          rrCount++;
-        }
-      }
-      avgRR = rrCount > 0 ? (totalRR / rrCount) : 0;
-    } else {
-      avgRR = avgL !== 0 ? avgW / avgL : 0;
-    }
-
-    return {
-      winRate: (wins.length / trades.length) * 100,
-      avgWinUSD: avgW,
-      avgLossUSD: avgL,
-      avgRR,
-      totalUSD: trades.reduce((a, t) => a + t.resultUSD, 0),
-      expectancyUSD: (probWin * avgW) - (probLoss * avgL),
-      profitFactor: profitFactor === Infinity ? 999 : profitFactor,
-      maxDrawdown: maxDD,
-      bestTrade,
-      worstTrade,
-      bestDayGains,
-      totalTrades: trades.length,
-    };
-  };
 
   const deleteTrade = (id: string) => {
     if (window.confirm('Are you sure you want to delete this trade?')) {
@@ -406,36 +251,6 @@ function App() {
     cancelEdit();
   };
 
-  const exportCSV = () => {
-    const headers = ['Date', 'Type', 'Contracts', 'Entry', 'Exit', 'Stop Loss', 'Take Profit', 'Risk Pts', 'Reward Pts', 'Points', 'Ticks', 'Gross USD', 'Commission', 'Net USD', 'Setup', 'Note'];
-    const rows = trades.map(t => [
-      t.date,
-      t.isLong ? 'LONG' : 'SHORT',
-      t.contracts,
-      t.entryPrice.toFixed(2),
-      t.exitPrice.toFixed(2),
-      t.stopLoss?.toFixed(2) ?? '',
-      t.takeProfit?.toFixed(2) ?? '',
-      t.riskPoints?.toFixed(2) ?? '',
-      t.rewardPoints?.toFixed(2) ?? '',
-      t.points.toFixed(2),
-      t.ticks.toFixed(0),
-      t.grossUSD.toFixed(2),
-      t.commission.toFixed(2),
-      t.resultUSD.toFixed(2),
-      t.setup || '',
-      `"${(t.note || '').replace(/"/g, '""')}"`,
-    ]);
-
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `MES_trades_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const exportDB = async () => {
     if (!window.ipcRenderer) return;
@@ -459,7 +274,6 @@ function App() {
     return isNaN(qty) ? 0 : qty;
   };
 
-  const formatUSD = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
   const previewPts = () => {
     const e = parseFloat(entryPrice), ex = parseFloat(exitPrice);
@@ -473,19 +287,6 @@ function App() {
     return gross - (commissionPerContract * qty);
   };
 
-  const formatDateLabel = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year.slice(2)}`;
-  };
-
-  const formatDayFull = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    const d = new Date(dateStr + 'T12:00:00');
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-  };
 
   const sortedTrades = [...trades].sort((a, b) => {
     const ta = a.createdAt || parseInt(a.id) || new Date(a.date).getTime();
@@ -500,18 +301,13 @@ function App() {
     return acc;
   }, {});
 
-  const sortedDays = Object.keys(tradesByDay).sort((a, b) => {
-    return sortOrder === 'oldest'
-      ? new Date(a).getTime() - new Date(b).getTime()
-      : new Date(b).getTime() - new Date(a).getTime();
-  });
 
   const selectedDayTrades = selectedDay ? (tradesByDay[selectedDay] || []) : [];
   const selectedDayStats = selectedDay ? calculateStats(selectedDayTrades) : EMPTY_STATS;
   const selectedDaySorted = [...selectedDayTrades].sort((a, b) => {
     const ta = a.createdAt || parseInt(a.id) || 0;
     const tb = b.createdAt || parseInt(b.id) || 0;
-    return ta - tb;
+    return sortOrder === 'oldest' ? ta - tb : tb - ta;
   });
 
   return (
@@ -688,13 +484,31 @@ function App() {
                   </div>
                 </div>
 
-                {/* Toggle button for advanced stats */}
-                <button className="btn-toggle-stats" onClick={() => setShowAdvancedStats(!showAdvancedStats)}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`toggle-chevron ${showAdvancedStats ? 'open' : ''}`}>
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                  {showAdvancedStats ? 'Hide' : 'More'} Stats
-                </button>
+                {/* Toggle buttons for advanced stats and charts */}
+                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '4px' }}>
+                  <button className="btn-toggle-stats" onClick={() => setShowAdvancedStats(!showAdvancedStats)}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`toggle-chevron ${showAdvancedStats ? 'open' : ''}`}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    {showAdvancedStats ? 'Hide' : 'More'} Stats
+                  </button>
+                  <button className="btn-toggle-stats" onClick={() => setShowCharts(!showCharts)}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      {showCharts ? (
+                        <>
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </>
+                      ) : (
+                        <>
+                          <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </>
+                      )}
+                    </svg>
+                    {showCharts ? 'Hide' : 'Show'} Charts
+                  </button>
+                </div>
 
                 {/* Stats Row 2: Advanced (collapsible) */}
                 <div className={`stats-collapsible ${showAdvancedStats ? 'expanded' : ''}`}>
@@ -727,15 +541,17 @@ function App() {
                 </div>
 
                 {/* Charts Row */}
-                <div className="charts-row">
-                  <Charts trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} />
-                  <div className="mini-chart-box" style={{ flex: 2 }}>
-                    <span className="mini-chart-title">Equity Curve</span>
-                    <EquityCurve trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} inline />
-                  </div>
-                  <div className="mini-chart-box" style={{ flex: 2 }}>
-                    <span className="mini-chart-title">Drawdown</span>
-                    <DrawdownChart trades={(selectedDay && !showAllTrades) ? selectedDaySorted : sortedTrades} />
+                <div className={`charts-collapsible ${showCharts ? 'expanded' : ''}`}>
+                  <div className="charts-row">
+                    <WinLossDonut trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} />
+                    <div className="mini-chart-box" style={{ flex: 2 }}>
+                      <span className="mini-chart-title">Equity Curve</span>
+                      <EquityCurve trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} inline />
+                    </div>
+                    <div className="mini-chart-box" style={{ flex: 2 }}>
+                      <span className="mini-chart-title">Drawdown</span>
+                      <DrawdownChart trades={(selectedDay && !showAllTrades) ? selectedDaySorted : sortedTrades} />
+                    </div>
                   </div>
                 </div>
               </>);
@@ -752,86 +568,147 @@ function App() {
                   {showAllTrades ? 'All Trades' : selectedDay ? formatDayFull(selectedDay) : 'Micro E-mini S&P 500 Trade Log'}
                 </h3>
                 <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  <button
-                    className="btn-export"
-                    onClick={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
-                    title="Toggle sort order"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      {sortOrder === 'newest' ? (
-                        <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>
-                      ) : (
-                        <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></>
-                      )}
-                    </svg>
-                    {sortOrder === 'newest' ? 'Newest' : 'Oldest'} First
-                  </button>
+                  {(selectedDay || showAllTrades) && (
+                    <button
+                      className="btn-export"
+                      onClick={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
+                      title="Toggle sort order"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        {sortOrder === 'newest' ? (
+                          <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>
+                        ) : (
+                          <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></>
+                        )}
+                      </svg>
+                      {sortOrder === 'newest' ? 'Newest' : 'Oldest'} First
+                    </button>
+                  )}
                   {!selectedDay && !showAllTrades && trades.length > 0 && (
                     <button className="btn-export btn-all-trades" onClick={() => { setShowAllTrades(true); setEditingId(null); setExpandedNote(null); }} title="View all trades">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
                       All
                     </button>
                   )}
-                  {trades.length > 0 && (
-                    <button className="btn-export" onClick={exportCSV} title="Export CSV">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                      CSV
-                    </button>
-                  )}
                 </div>
               </div>
 
-              {/* === DAY CARDS GRID VIEW === */}
+              {/* === CALENDAR MONTH VIEW === */}
               {!selectedDay && !showAllTrades && (
-                <div className="day-cards-grid">
-                  {sortedDays.map(day => {
-                    const dayTrades = tradesByDay[day];
-                    const dayPnL = dayTrades.reduce((sum, t) => sum + t.resultUSD, 0);
-                    const dayWins = dayTrades.filter(t => t.isWin).length;
-                    const dayWinRate = (dayWins / dayTrades.length) * 100;
-                    const isProfit = dayPnL >= 0;
-                    const dayPoints = dayTrades.reduce((sum, t) => sum + t.points, 0);
+                <div className="calendar-view">
+                  <div className="calendar-nav">
+                    <button className="cal-nav-btn" onClick={() => setCalendarMonth(prev => {
+                      const d = new Date(prev.year, prev.month - 1, 1);
+                      return { year: d.getFullYear(), month: d.getMonth() };
+                    })}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                    </button>
+                    <span className="cal-month-label">
+                      {new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <button className="cal-nav-btn" onClick={() => setCalendarMonth(prev => {
+                      const d = new Date(prev.year, prev.month + 1, 1);
+                      return { year: d.getFullYear(), month: d.getMonth() };
+                    })}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                    </button>
+                  </div>
+                  <div className="calendar-weekdays">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                      <span key={d} className="cal-weekday">{d}</span>
+                    ))}
+                  </div>
+                  <div className="calendar-grid">
+                    {(() => {
+                      const { year, month } = calendarMonth;
+                      const firstDay = new Date(year, month, 1);
+                      const lastDay = new Date(year, month + 1, 0);
+                      const daysInMonth = lastDay.getDate();
+                      // Monday = 0 ... Sunday = 6
+                      let startDow = firstDay.getDay() - 1;
+                      if (startDow < 0) startDow = 6;
 
-                    return (
-                      <div
-                        key={day}
-                        className={`day-card ${isProfit ? 'day-card-profit' : 'day-card-loss'}`}
-                        onClick={() => { setSelectedDay(day); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}
-                      >
-                        <div className="day-card-header">
-                          <span className="day-card-date">{formatDateLabel(day)}</span>
-                          <span className={`day-card-badge ${isProfit ? 'badge-profit' : 'badge-loss'}`}>
-                            {isProfit ? '▲' : '▼'}
-                          </span>
-                        </div>
-                        <div className="day-card-pnl" style={{ color: isProfit ? '#10b981' : '#ef4444' }}>
-                          {isProfit ? '+' : ''}{formatUSD(dayPnL)}
-                        </div>
-                        <div className="day-card-meta">
-                          <span>{dayTrades.length} trade{dayTrades.length !== 1 ? 's' : ''}</span>
-                          <span className="day-card-separator">·</span>
-                          <span style={{ color: dayWinRate >= 50 ? '#34d399' : '#f87171' }}>{dayWinRate.toFixed(0)}% WR</span>
-                        </div>
-                        <div className="day-card-pts">
-                          {dayPoints > 0 ? '+' : ''}{dayPoints.toFixed(2)} pts
-                        </div>
-                        <div className="day-card-bar">
-                          <div
-                            className="day-card-bar-fill"
-                            style={{
-                              width: `${dayWinRate}%`,
-                              background: isProfit
-                                ? 'linear-gradient(90deg, #10b981, #34d399)'
-                                : 'linear-gradient(90deg, #ef4444, #f87171)',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                      const cells: React.ReactNode[] = [];
+
+                      // Empty leading cells
+                      for (let i = 0; i < startDow; i++) {
+                        cells.push(<div key={`empty-${i}`} className="cal-cell cal-cell-empty" />);
+                      }
+
+                      // Monthly P&L totals for intensity
+                      const monthPnLs = Array.from({ length: daysInMonth }, (_, i) => {
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
+                        const dt = tradesByDay[dateStr];
+                        return dt ? dt.reduce((s, t) => s + t.resultUSD, 0) : 0;
+                      });
+                      const maxAbsPnL = Math.max(...monthPnLs.map(Math.abs), 1);
+
+                      for (let d = 1; d <= daysInMonth; d++) {
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const dayTrades = tradesByDay[dateStr];
+                        const hasTrades = dayTrades && dayTrades.length > 0;
+                        const isToday = dateStr === new Date().toISOString().split('T')[0];
+
+                        if (!hasTrades) {
+                          cells.push(
+                            <div key={dateStr} className={`cal-cell ${isToday ? 'cal-cell-today' : ''}`}>
+                              <span className="cal-day-num">{d}</span>
+                            </div>
+                          );
+                        } else {
+                          const dayPnL = dayTrades.reduce((s, t) => s + t.resultUSD, 0);
+                          const dayWins = dayTrades.filter(t => t.isWin).length;
+                          const dayWR = (dayWins / dayTrades.length) * 100;
+                          const isProfit = dayPnL >= 0;
+                          const intensity = Math.min(Math.abs(dayPnL) / maxAbsPnL, 1);
+                          const bg = isProfit
+                            ? `rgba(16, 185, 129, ${0.08 + intensity * 0.22})`
+                            : `rgba(239, 68, 68, ${0.08 + intensity * 0.22})`;
+                          const border = isProfit
+                            ? `rgba(16, 185, 129, ${0.15 + intensity * 0.25})`
+                            : `rgba(239, 68, 68, ${0.15 + intensity * 0.25})`;
+
+                          cells.push(
+                            <div
+                              key={dateStr}
+                              className={`cal-cell cal-cell-active ${isToday ? 'cal-cell-today' : ''} ${isProfit ? 'cal-cell-profit' : 'cal-cell-loss'}`}
+                              style={{ background: bg, borderColor: border }}
+                              onClick={() => { setSelectedDay(dateStr); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}
+                            >
+                              <div className="cal-cell-top">
+                                <span className="cal-day-num">{d}</span>
+                                <span className="cal-trade-count">{dayTrades.length}t</span>
+                              </div>
+                              <div className="cal-cell-pnl" style={{ color: isProfit ? '#34d399' : '#f87171' }}>
+                                {isProfit ? '+' : ''}{formatUSD(dayPnL)}
+                              </div>
+                              <div className="cal-cell-wr">
+                                <div className="cal-wr-bar">
+                                  <div className="cal-wr-fill" style={{
+                                    width: `${dayWR}%`,
+                                    background: isProfit ? 'linear-gradient(90deg, #10b981, #34d399)' : 'linear-gradient(90deg, #ef4444, #f87171)'
+                                  }} />
+                                </div>
+                                <span className="cal-wr-label">{dayWR.toFixed(0)}%</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                      }
+
+                      // Trailing empties to complete the last row
+                      const totalCells = cells.length;
+                      const trailing = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+                      for (let i = 0; i < trailing; i++) {
+                        cells.push(<div key={`trail-${i}`} className="cal-cell cal-cell-empty" />);
+                      }
+
+                      return cells;
+                    })()}
+                  </div>
                   {trades.length === 0 && (
-                    <div style={{ textAlign: 'center', color: '#475569', marginTop: '2rem', fontSize: '0.8rem', gridColumn: '1 / -1' }}>
-                      No trades logged yet.
+                    <div style={{ textAlign: 'center', color: '#475569', marginTop: '1.5rem', fontSize: '0.8rem' }}>
+                      No trades logged yet. Start logging to see your calendar.
                     </div>
                   )}
                 </div>
