@@ -71,6 +71,22 @@ function App() {
       setIsLoaded(true);
     };
     loadData();
+
+    // Listen for real-time trades from NinjaTrader bridge
+    const handleNtTrade = (_event: any, trade: any) => {
+      setTrades(prev => {
+        // Prevent duplicates by checking if this trade ID already exists
+        if (prev.some((t: any) => t.id === trade.id)) return prev;
+        return [...prev, trade];
+      });
+    };
+
+    window.ipcRenderer?.on('nt-trade-received', handleNtTrade);
+
+    // Cleanup: remove listener on unmount (prevents React Strict Mode duplicates)
+    return () => {
+      window.ipcRenderer?.off('nt-trade-received', handleNtTrade);
+    };
   }, []);
 
   // Save trades + recalculate stats

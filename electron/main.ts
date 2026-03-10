@@ -1,4 +1,5 @@
 import { app, BrowserWindow, screen, ipcMain, dialog } from 'electron'
+import http from 'node:http'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -20,7 +21,7 @@ function createWindow() {
 
   win = new BrowserWindow({
     width: Math.floor(width * 0.80),
-    height: Math.floor(height * 0.86),
+    height: Math.floor(height * 0.90),
     resizable: true,
     maximizable: true,
     movable: true,
@@ -28,7 +29,7 @@ function createWindow() {
     center: true,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#020617',
+    backgroundColor: '#050d1a',
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
@@ -264,3 +265,155 @@ ipcMain.handle('import-db', async () => {
 })
 
 app.whenReady().then(createWindow)
+
+// ═══════════════════════════════════════════════════════════════════════
+//  NINJATRADER BRIDGE — HTTP Server on localhost:52525
+//  Receives individual executions from AlphaCore NinjaTrader Add-on
+//  and pairs entry + exit into a single complete trade.
+// ═══════════════════════════════════════════════════════════════════════
+
+const NT_PORT = 52525
+const POINT_VALUE = 5  // MES Micro E-mini S&P 500
+const TICK = 0.25
+
+interface PendingEntry {
+  instrument: string
+  side: string
+  quantity: number
+  price: number
+  date: string
+  commission: number
+  stopLoss: number
+  takeProfit: number
+}
+
+const pendingEntries: PendingEntry[] = []
+
+function startNinjaTraderBridge() {
+  const server = http.createServer((req: any, res: any) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204)
+      res.end()
+      return
+    }
+
+    if (req.method === 'POST' && req.url === '/api/trade') {
+      let body = ''
+      req.on('data', (chunk: Buffer) => { body += chunk.toString() })
+      req.on('end', () => {
+        try {
+          const exec = JSON.parse(body)
+          processExecution(exec)
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: true }))
+        } catch (err) {
+          console.error('[NT Bridge] Parse error:', err)
+          res.writeHead(400, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ success: false, error: 'Invalid JSON' }))
+        }
+      })
+    } else {
+      res.writeHead(404)
+      res.end('Not found')
+    }
+  })
+
+  server.listen(NT_PORT, '127.0.0.1', () => {
+    console.log(`[NT Bridge] Listening on http://127.0.0.1:${NT_PORT}/api/trade`)
+  })
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[NT Bridge] Port ${NT_PORT} already in use. Bridge disabled.`)
+    } else {
+      console.error('[NT Bridge] Server error:', err)
+    }
+  })
+}
+
+function processExecution(exec: any) {
+  const action = (exec.orderAction || '').toLowerCase()
+  const qty = parseInt(exec.quantity) || 1
+  const price = parseFloat(exec.price) || 0
+  const commission = parseFloat(exec.commission) || 0
+  const instrument = exec.instrument || 'MES'
+  const date = exec.date || new Date().toISOString().split('T')[0]
+  const stopLoss = parseFloat(exec.stopLoss) || 0
+  const takeProfit = parseFloat(exec.takeProfit) || 0
+
+  // Position-based matching: if no pending entry for this instrument, it's an entry.
+  // If there IS a pending entry, this execution is the exit.
+  const idx = pendingEntries.findIndex(e => e.instrument === instrument && e.quantity === qty)
+
+  if (idx >= 0) {
+    // EXIT: we already have a pending entry — close the trade
+    const entry = pendingEntries.splice(idx, 1)[0]
+    buildTrade(entry, price, commission, date)
+  } else {
+    // ENTRY: no pending entry for this instrument — store it
+    // Determine side: Buy = Long, Sell/SellShort = Short
+    const side = (action === 'sell' || action === 'sellshort') ? 'Short' : 'Long'
+    pendingEntries.push({ instrument, side, quantity: qty, price, date, commission, stopLoss, takeProfit })
+    console.log(`[NT Bridge] 📥 Entry stored: ${side} ${qty}x ${instrument} @ ${price}${stopLoss ? ' SL:' + stopLoss : ''}${takeProfit ? ' TP:' + takeProfit : ''}`)
+  }
+}
+
+async function buildTrade(entry: PendingEntry, exitPrice: number, exitCommission: number, date: string) {
+  const isLong = entry.side === 'Long'
+  const points = isLong ? (exitPrice - entry.price) : (entry.price - exitPrice)
+  const ticks = points / TICK
+  const grossUSD = points * POINT_VALUE * entry.quantity
+  const totalCommission = entry.commission + exitCommission
+  const resultUSD = grossUSD - totalCommission
+
+  const trade: any = {
+    id: crypto.randomUUID(),
+    isLong,
+    contracts: entry.quantity,
+    entryPrice: entry.price,
+    exitPrice,
+    points: parseFloat(points.toFixed(2)),
+    ticks: parseFloat(ticks.toFixed(2)),
+    grossUSD: parseFloat(grossUSD.toFixed(2)),
+    commission: parseFloat(totalCommission.toFixed(2)),
+    resultUSD: parseFloat(resultUSD.toFixed(2)),
+    isWin: resultUSD > 0,
+    date,
+    createdAt: Date.now(),
+    note: 'Auto-imported from NinjaTrader',
+    setup: 'Other' as const
+  }
+
+  // Add SL/TP if available
+  if (entry.stopLoss > 0) trade.stopLoss = entry.stopLoss
+  if (entry.takeProfit > 0) trade.takeProfit = entry.takeProfit
+
+  // Save to file
+  try {
+    let trades: any[] = []
+    if (fs.existsSync(DATA_PATH)) {
+      const data = await fs.promises.readFile(DATA_PATH, 'utf-8')
+      trades = JSON.parse(data)
+    }
+    trades.push(trade)
+    await fs.promises.writeFile(DATA_PATH, JSON.stringify(trades, null, 2), 'utf-8')
+
+    // Notify the UI in real-time
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('nt-trade-received', trade)
+    }
+
+    console.log(`[NT Bridge] ✓ Trade saved: ${isLong ? 'LONG' : 'SHORT'} ${entry.quantity}x | ${points > 0 ? '+' : ''}${points.toFixed(2)} pts | $${resultUSD.toFixed(2)}`)
+  } catch (err) {
+    console.error('[NT Bridge] Failed to save trade:', err)
+  }
+}
+
+// Start the bridge when the app is ready
+app.whenReady().then(() => {
+  startNinjaTraderBridge()
+})
