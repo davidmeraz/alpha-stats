@@ -106,6 +106,7 @@ ipcMain.handle('load-trades', async () => {
   try {
     if (fs.existsSync(DATA_PATH)) {
       const data = await fs.promises.readFile(DATA_PATH, 'utf-8')
+      if (!data || data.trim() === '') return []
       return JSON.parse(data)
     }
     return []

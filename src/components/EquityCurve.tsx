@@ -34,7 +34,7 @@ function EquityCurve({ trades, inline }: EquityCurveProps) {
         ctx.clearRect(0, 0, W, H);
 
         if (trades.length === 0) {
-            ctx.fillStyle = '#475569';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
             ctx.font = '12px Inter, system-ui, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('No data for equity curve', W / 2, H / 2);
@@ -64,7 +64,7 @@ function EquityCurve({ trades, inline }: EquityCurveProps) {
         ctx.strokeStyle = 'rgba(255,255,255,0.04)';
         ctx.lineWidth = 1;
         ctx.font = '10px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#475569';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.textAlign = 'right';
         for (let i = 0; i <= gridLines; i++) {
             const val = minVal + (range * i) / gridLines;
@@ -127,7 +127,7 @@ function EquityCurve({ trades, inline }: EquityCurveProps) {
             ctx.arc(getX(i), getY(equityPoints[i]), 3, 0, Math.PI * 2);
             ctx.fillStyle = lineColor;
             ctx.fill();
-            ctx.strokeStyle = '#0f172a';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             ctx.lineWidth = 1.5;
             ctx.stroke();
         }

@@ -31,8 +31,6 @@ function App() {
   // Day detail view
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showAllTrades, setShowAllTrades] = useState(false);
-  const [showAdvancedStats, setShowAdvancedStats] = useState(false);
-  const [showCharts, setShowCharts] = useState(true);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -334,10 +332,6 @@ function App() {
 
           {/* Left Panel */}
           <div className="card left-panel">
-            <div className="header">
-              <h1>ALPHA CORE</h1>
-              <p>Trading Journal · MES Futures</p>
-            </div>
 
             <div className="input-group">
               <label>Type</label>
@@ -369,11 +363,11 @@ function App() {
               </div>
               <div className="input-group">
                 <label>SL</label>
-                <input type="number" step="0.25" placeholder="—" value={stopLossPrice} onChange={(e) => setStopLossPrice(e.target.value)} className="sl-input" />
+                <input type="number" step="0.25" placeholder="—" value={stopLossPrice} onChange={(e) => setStopLossPrice(e.target.value)} />
               </div>
               <div className="input-group">
                 <label>TP</label>
-                <input type="number" step="0.25" placeholder="—" value={takeProfitPrice} onChange={(e) => setTakeProfitPrice(e.target.value)} className="tp-input" />
+                <input type="number" step="0.25" placeholder="—" value={takeProfitPrice} onChange={(e) => setTakeProfitPrice(e.target.value)} />
               </div>
             </div>
 
@@ -406,22 +400,31 @@ function App() {
             </div>
 
             <div className="preview-box">
-              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>NET USD PREVIEW</span>
-              <div style={{ fontSize: '1.4rem', fontWeight: '800', color: previewNet() >= 0 ? '#10b981' : '#ef4444' }}>
-                {formatUSD(previewNet())}
+              <div className="preview-details">
+                <span className="preview-pill">
+                  <span className="preview-pill-label">PTS</span>
+                  <span className="preview-pill-value" style={{ color: previewPts() >= 0 ? '#34d399' : '#f87171' }}>{previewPts() > 0 ? '+' : ''}{previewPts().toFixed(2)}</span>
+                </span>
+                <span className="preview-pill">
+                  <span className="preview-pill-label">TICKS</span>
+                  <span className="preview-pill-value" style={{ color: previewPts() >= 0 ? '#34d399' : '#f87171' }}>{(previewPts() / TICK_SIZE).toFixed(0)}</span>
+                </span>
+                <span className="preview-pill">
+                  <span className="preview-pill-label">COM</span>
+                  <span className="preview-pill-value">{formatUSD(commissionPerContract * getContractsQty())}</span>
+                </span>
               </div>
-              <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
-                {previewPts() > 0 ? '+' : ''}{previewPts().toFixed(2)} pts | {(previewPts() / TICK_SIZE).toFixed(0)} ticks
+              <div className="preview-net">
+                <span className="preview-net-label">NET USD</span>
+                <span className="preview-net-amount" style={{ color: previewNet() >= 0 ? '#10b981' : '#f43f5e' }}>
+                  {previewNet() > 0 ? '+' : ''}{formatUSD(previewNet())}
+                </span>
               </div>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
-                Commission: {formatUSD(commissionPerContract * getContractsQty())}
-              </div>
+              <button className="btn-primary" onClick={addTrade} disabled={!entryPrice || !exitPrice} title="Log Trade (ENTER ↵)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                Log Trade
+              </button>
             </div>
-
-            <button className="btn-primary" onClick={addTrade} disabled={!entryPrice || !exitPrice} title="Log Trade (ENTER ↵)">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-              <span style={{ fontSize: '1rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Log Trade</span>
-            </button>
 
             <div className="left-panel-bottom">
               {/* Commission config toggle */}
@@ -500,472 +503,444 @@ function App() {
                   </div>
                 </div>
 
-                {/* Toggle buttons for advanced stats and charts */}
-                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '4px' }}>
-                  <button className="btn-toggle-stats" onClick={() => setShowAdvancedStats(!showAdvancedStats)}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`toggle-chevron ${showAdvancedStats ? 'open' : ''}`}>
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                    {showAdvancedStats ? 'Hide' : 'More'} Stats
-                  </button>
-                  <button className="btn-toggle-stats" onClick={() => setShowCharts(!showCharts)}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      {showCharts ? (
-                        <>
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </>
-                      ) : (
-                        <>
-                          <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
-                          <line x1="1" y1="1" x2="23" y2="23" />
-                        </>
-                      )}
-                    </svg>
-                    {showCharts ? 'Hide' : 'Show'} Charts
-                  </button>
-                </div>
-
-                {/* Stats Row 2: Advanced (collapsible) */}
-                <div className={`stats-collapsible ${showAdvancedStats ? 'expanded' : ''}`}>
-                  <div className="stats-grid stats-grid-secondary">
-                    <div className="stat-box" style={{ '--theme-color': '#f59e0b' } as React.CSSProperties}>
-                      <div className="stat-label"><div className="stat-pulse-dot"></div> Profit Factor</div>
-                      <div className="stat-value" style={{ color: '#f59e0b' }}>
-                        {displayStats.profitFactor >= 999 ? '∞' : displayStats.profitFactor.toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="stat-box" style={{ '--theme-color': '#f43f5e' } as React.CSSProperties}>
-                      <div className="stat-label"><div className="stat-pulse-dot"></div> Max Drawdown</div>
-                      <div className="stat-value" style={{ color: '#f43f5e' }}>{formatUSD(displayStats.maxDrawdown)}</div>
-                    </div>
-                    <div className="stat-box" style={{ '--theme-color': '#2dd4bf' } as React.CSSProperties}>
-                      <div className="stat-label"><div className="stat-pulse-dot"></div> Best Trade</div>
-                      <div className="stat-value" style={{ color: '#2dd4bf' }}>{formatUSD(displayStats.bestTrade)}</div>
-                    </div>
-                    <div className="stat-box" style={{ '--theme-color': '#ef4444' } as React.CSSProperties}>
-                      <div className="stat-label"><div className="stat-pulse-dot"></div> Worst Trade</div>
-                      <div className="stat-value" style={{ color: '#ef4444' }}>{formatUSD(displayStats.worstTrade)}</div>
-                    </div>
-                    <div className="stat-box" style={{ '--theme-color': '#10b981' } as React.CSSProperties}>
-                      <div className="stat-label"><div className="stat-pulse-dot"></div> Best Day</div>
-                      <div className="stat-value" style={{ color: '#10b981' }}>
-                        {displayStats.bestDayGains > 0 ? formatUSD(displayStats.bestDayGains) : '—'}
-                      </div>
+                {/* Stats Row 2 */}
+                <div className="stats-grid stats-grid-secondary" style={{ marginTop: '0.4rem' }}>
+                  <div className="stat-box" style={{ '--theme-color': '#f59e0b' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Profit Factor</div>
+                    <div className="stat-value" style={{ color: '#f59e0b' }}>
+                      {displayStats.profitFactor >= 999 ? '∞' : displayStats.profitFactor.toFixed(2)}
                     </div>
                   </div>
-                </div>
-
-                {/* Charts Row */}
-                <div className={`charts-collapsible ${showCharts ? 'expanded' : ''}`}>
-                  <div className="charts-row">
-                    <WinLossDonut trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} />
-                    <div className="mini-chart-box" style={{ flex: 2 }}>
-                      <span className="mini-chart-title">Equity Curve</span>
-                      <EquityCurve trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} inline />
-                    </div>
-                    <div className="mini-chart-box" style={{ flex: 2 }}>
-                      <span className="mini-chart-title">Drawdown</span>
-                      <DrawdownChart trades={(selectedDay && !showAllTrades) ? selectedDaySorted : sortedTrades} />
+                  <div className="stat-box" style={{ '--theme-color': '#f43f5e' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Max Drawdown</div>
+                    <div className="stat-value" style={{ color: '#f43f5e' }}>{formatUSD(displayStats.maxDrawdown)}</div>
+                  </div>
+                  <div className="stat-box" style={{ '--theme-color': '#2dd4bf' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Best Trade</div>
+                    <div className="stat-value" style={{ color: '#2dd4bf' }}>{formatUSD(displayStats.bestTrade)}</div>
+                  </div>
+                  <div className="stat-box" style={{ '--theme-color': '#ef4444' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Worst Trade</div>
+                    <div className="stat-value" style={{ color: '#ef4444' }}>{formatUSD(displayStats.worstTrade)}</div>
+                  </div>
+                  <div className="stat-box" style={{ '--theme-color': '#10b981' } as React.CSSProperties}>
+                    <div className="stat-label"><div className="stat-pulse-dot"></div> Best Day</div>
+                    <div className="stat-value" style={{ color: '#10b981' }}>
+                      {displayStats.bestDayGains > 0 ? formatUSD(displayStats.bestDayGains) : '—'}
                     </div>
                   </div>
                 </div>
               </>);
             })()}
 
-            <div className="trades-container">
-              <div className="trades-header">
-                <h3>
-                  {(selectedDay || showAllTrades) ? (
-                    <button className="btn-back-day" onClick={() => { setSelectedDay(null); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-                    </button>
-                  ) : null}
-                  {showAllTrades ? 'All Trades' : selectedDay ? formatDayFull(selectedDay) : 'Micro E-mini S&P 500 Trade Log'}
-                </h3>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  {(selectedDay || showAllTrades) && (
-                    <button
-                      className="btn-export"
-                      onClick={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
-                      title="Toggle sort order"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        {sortOrder === 'newest' ? (
-                          <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>
-                        ) : (
-                          <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></>
-                        )}
-                      </svg>
-                      {sortOrder === 'newest' ? 'Newest' : 'Oldest'} First
-                    </button>
-                  )}
-                  {!selectedDay && !showAllTrades && trades.length > 0 && (
-                    <button className="btn-export btn-all-trades" onClick={() => { setShowAllTrades(true); setEditingId(null); setExpandedNote(null); }} title="View all trades">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
-                      All
-                    </button>
-                  )}
+            <div className="main-content-split">
+              <div className="left-charts-column">
+                <WinLossDonut trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} />
+                <div className="mini-chart-box" style={{ minHeight: '180px' }}>
+                  <span className="mini-chart-title">Equity Curve</span>
+                  <EquityCurve trades={(selectedDay && !showAllTrades) ? selectedDayTrades : trades} inline />
+                </div>
+                <div className="mini-chart-box" style={{ minHeight: '180px' }}>
+                  <span className="mini-chart-title">Drawdown</span>
+                  <DrawdownChart trades={(selectedDay && !showAllTrades) ? selectedDaySorted : sortedTrades} />
                 </div>
               </div>
 
-              {/* === CALENDAR MONTH VIEW === */}
-              {!selectedDay && !showAllTrades && (
-                <div className="calendar-view">
-                  <div className="calendar-nav">
-                    <button className="cal-nav-btn" onClick={() => setCalendarMonth(prev => {
-                      const d = new Date(prev.year, prev.month - 1, 1);
-                      return { year: d.getFullYear(), month: d.getMonth() };
-                    })}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-                    </button>
-                    <span className="cal-month-label">
-                      {new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </span>
-                    <button className="cal-nav-btn" onClick={() => setCalendarMonth(prev => {
-                      const d = new Date(prev.year, prev.month + 1, 1);
-                      return { year: d.getFullYear(), month: d.getMonth() };
-                    })}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-                    </button>
+              <div className="trades-container" style={{ marginTop: 0 }}>
+                <div className="trades-header">
+                  <h3>
+                    {(selectedDay || showAllTrades) ? (
+                      <button className="btn-back-day" onClick={() => { setSelectedDay(null); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                      </button>
+                    ) : null}
+                    {showAllTrades ? 'All Trades' : selectedDay ? formatDayFull(selectedDay) : ''}
+                  </h3>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    {(selectedDay || showAllTrades) && (
+                      <button
+                        className="btn-export"
+                        onClick={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
+                        title="Toggle sort order"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          {sortOrder === 'newest' ? (
+                            <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>
+                          ) : (
+                            <><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></>
+                          )}
+                        </svg>
+                        {sortOrder === 'newest' ? 'Newest' : 'Oldest'} First
+                      </button>
+                    )}
+                    {!selectedDay && !showAllTrades && trades.length > 0 && (
+                      <button className="btn-export btn-all-trades" onClick={() => { setShowAllTrades(true); setEditingId(null); setExpandedNote(null); }} title="View all trades">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+                        All
+                      </button>
+                    )}
                   </div>
-                  <div className="calendar-weekdays">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
-                      <span key={d} className="cal-weekday">{d}</span>
-                    ))}
-                  </div>
-                  <div className="calendar-grid">
-                    {(() => {
-                      const { year, month } = calendarMonth;
-                      const firstDay = new Date(year, month, 1);
-                      const lastDay = new Date(year, month + 1, 0);
-                      const daysInMonth = lastDay.getDate();
-                      // Monday = 0 ... Sunday = 6
-                      let startDow = firstDay.getDay() - 1;
-                      if (startDow < 0) startDow = 6;
+                </div>
 
-                      const cells: React.ReactNode[] = [];
-
-                      // Empty leading cells
-                      for (let i = 0; i < startDow; i++) {
-                        cells.push(<div key={`empty-${i}`} className="cal-cell cal-cell-empty" />);
-                      }
-
-                      // Monthly P&L totals for intensity
-                      const monthPnLs = Array.from({ length: daysInMonth }, (_, i) => {
-                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
-                        const dt = tradesByDay[dateStr];
-                        return dt ? dt.reduce((s, t) => s + t.resultUSD, 0) : 0;
-                      });
-                      const maxAbsPnL = Math.max(...monthPnLs.map(Math.abs), 1);
-
-                      for (let d = 1; d <= daysInMonth; d++) {
-                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                        const dayTrades = tradesByDay[dateStr];
-                        const hasTrades = dayTrades && dayTrades.length > 0;
-                        const isToday = dateStr === new Date().toISOString().split('T')[0];
-
-                        if (!hasTrades) {
-                          cells.push(
-                            <div key={dateStr} className={`cal-cell ${isToday ? 'cal-cell-today' : ''}`}>
-                              <span className="cal-day-num">{d}</span>
-                            </div>
-                          );
-                        } else {
-                          const dayPnL = dayTrades.reduce((s, t) => s + t.resultUSD, 0);
-                          const dayWins = dayTrades.filter(t => t.isWin).length;
-                          const dayWR = (dayWins / dayTrades.length) * 100;
-                          const isProfit = dayPnL >= 0;
-                          const intensity = Math.min(Math.abs(dayPnL) / maxAbsPnL, 1);
-                          const bg = isProfit
-                            ? `rgba(16, 185, 129, ${0.08 + intensity * 0.22})`
-                            : `rgba(239, 68, 68, ${0.08 + intensity * 0.22})`;
-                          const border = isProfit
-                            ? `rgba(16, 185, 129, ${0.15 + intensity * 0.25})`
-                            : `rgba(239, 68, 68, ${0.15 + intensity * 0.25})`;
-
-                          cells.push(
-                            <div
-                              key={dateStr}
-                              className={`cal-cell cal-cell-active ${isToday ? 'cal-cell-today' : ''} ${isProfit ? 'cal-cell-profit' : 'cal-cell-loss'}`}
-                              style={{ background: bg, borderColor: border }}
-                              onClick={() => { setSelectedDay(dateStr); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}
-                            >
-                              <div className="cal-cell-top">
-                                <span className="cal-day-num">{d}</span>
-                                <span className="cal-trade-count">{dayTrades.length}t</span>
-                              </div>
-                              <div className="cal-cell-pnl" style={{ color: isProfit ? '#34d399' : '#f87171' }}>
-                                {isProfit ? '+' : ''}{formatUSD(dayPnL)}
-                              </div>
-                              <div className="cal-cell-wr">
-                                <div className="cal-wr-bar">
-                                  <div className="cal-wr-fill" style={{
-                                    width: `${dayWR}%`,
-                                    background: isProfit ? 'linear-gradient(90deg, #10b981, #34d399)' : 'linear-gradient(90deg, #ef4444, #f87171)'
-                                  }} />
-                                </div>
-                                <span className="cal-wr-label">{dayWR.toFixed(0)}%</span>
-                              </div>
-                            </div>
-                          );
-                        }
-                      }
-
-                      // Trailing empties to complete the last row
-                      const totalCells = cells.length;
-                      const trailing = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-                      for (let i = 0; i < trailing; i++) {
-                        cells.push(<div key={`trail-${i}`} className="cal-cell cal-cell-empty" />);
-                      }
-
-                      return cells;
-                    })()}
-                  </div>
-                  {trades.length === 0 && (
-                    <div style={{ textAlign: 'center', color: '#475569', marginTop: '1.5rem', fontSize: '0.8rem' }}>
-                      No trades logged yet. Start logging to see your calendar.
+                {/* === CALENDAR MONTH VIEW === */}
+                {!selectedDay && !showAllTrades && (
+                  <div className="calendar-view">
+                    <div className="calendar-nav">
+                      <button className="cal-nav-btn" onClick={() => setCalendarMonth(prev => {
+                        const d = new Date(prev.year, prev.month - 1, 1);
+                        return { year: d.getFullYear(), month: d.getMonth() };
+                      })}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                      </button>
+                      <span className="cal-month-label">
+                        {new Date(calendarMonth.year, calendarMonth.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </span>
+                      <button className="cal-nav-btn" onClick={() => setCalendarMonth(prev => {
+                        const d = new Date(prev.year, prev.month + 1, 1);
+                        return { year: d.getFullYear(), month: d.getMonth() };
+                      })}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                      </button>
                     </div>
-                  )}
-                </div>
-              )}
+                    <div className="calendar-weekdays">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                        <span key={d} className="cal-weekday">{d}</span>
+                      ))}
+                    </div>
+                    <div className="calendar-grid">
+                      {(() => {
+                        const { year, month } = calendarMonth;
+                        const firstDay = new Date(year, month, 1);
+                        const lastDay = new Date(year, month + 1, 0);
+                        const daysInMonth = lastDay.getDate();
+                        // Monday = 0 ... Sunday = 6
+                        let startDow = firstDay.getDay() - 1;
+                        if (startDow < 0) startDow = 6;
 
-              {/* === ALL TRADES VIEW === */}
-              {showAllTrades && !selectedDay && (
-                <div className="day-detail-view">
-                  <div className="trades-list">
-                    {sortedTrades.map(t => (
-                      <div key={t.id} className={`trade-row ${expandedNote === t.id ? 'expanded' : ''}`}>
-                        <div className="trade-row-main">
-                          <span className="trade-date-col">{formatDateLabel(t.date)}</span>
-                          <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
-                            {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
-                          </span>
-                          <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
-                          {t.setup && <span className="trade-setup-badge">{t.setup}</span>}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                            {t.riskPoints && t.rewardPoints ? (
-                              <span className="trade-rr-badge" title={`Planned R:R (TP/SL) | Actual R:R 1:${floor1Str(Math.abs(t.points) / t.riskPoints)}`}>
-                                Plan 1:{floor1Str(t.rewardPoints / t.riskPoints)}
-                              </span>
-                            ) : t.riskPoints ? (
-                              <span className="trade-rr-badge" title="Risk:Reward">1:{floor1Str(Math.abs(t.points) / t.riskPoints)}</span>
-                            ) : null}
-                            <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
-                              {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
-                            </span>
-                          </div>
-                          <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
-                          <span className="trade-actions">
-                            {(t.note) && (
-                              <button className="screenshot-btn" onClick={() => setExpandedNote(expandedNote === t.id ? null : t.id)} title="View note">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
-                              </button>
-                            )}
-                            {t.screenshotFile ? (
-                              <>
-                                <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="View screenshot">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                                </button>
-                                <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Change image">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
-                                </button>
-                              </>
-                            ) : (
-                              <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Attach image">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
-                              </button>
-                            )}
-                            <button className="edit-btn" onClick={() => startEdit(t)} title="Edit trade">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
-                            </button>
-                            <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
-                          </span>
-                        </div>
-                        {expandedNote === t.id && t.note && (
-                          <div className="trade-note-expanded">{t.note}</div>
-                        )}
-                        {editingId === t.id && editForm && (
-                          <div className="trade-edit-form">
-                            <div className="edit-row">
-                              <div className="edit-field">
-                                <label>Type</label>
-                                <div className="outcome-selector">
-                                  <button className={`outcome-btn ${editForm.isLong ? 'active' : ''}`} style={editForm.isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setEditForm({ ...editForm, isLong: true })}>LONG</button>
-                                  <button className={`outcome-btn ${!editForm.isLong ? 'active' : ''}`} style={!editForm.isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setEditForm({ ...editForm, isLong: false })}>SHORT</button>
+                        const cells: React.ReactNode[] = [];
+
+                        // Empty leading cells
+                        for (let i = 0; i < startDow; i++) {
+                          cells.push(<div key={`empty-${i}`} className="cal-cell cal-cell-empty" />);
+                        }
+
+                        // Monthly P&L totals for intensity
+                        const monthPnLs = Array.from({ length: daysInMonth }, (_, i) => {
+                          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
+                          const dt = tradesByDay[dateStr];
+                          return dt ? dt.reduce((s, t) => s + t.resultUSD, 0) : 0;
+                        });
+                        const maxAbsPnL = Math.max(...monthPnLs.map(Math.abs), 1);
+
+                        for (let d = 1; d <= daysInMonth; d++) {
+                          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                          const dayTrades = tradesByDay[dateStr];
+                          const hasTrades = dayTrades && dayTrades.length > 0;
+                          const isToday = dateStr === new Date().toISOString().split('T')[0];
+
+                          if (!hasTrades) {
+                            cells.push(
+                              <div key={dateStr} className={`cal-cell ${isToday ? 'cal-cell-today' : ''}`}>
+                                <span className="cal-day-num">{d}</span>
+                              </div>
+                            );
+                          } else {
+                            const dayPnL = dayTrades.reduce((s, t) => s + t.resultUSD, 0);
+                            const dayWins = dayTrades.filter(t => t.isWin).length;
+                            const dayWR = (dayWins / dayTrades.length) * 100;
+                            const isProfit = dayPnL >= 0;
+                            const intensity = Math.min(Math.abs(dayPnL) / maxAbsPnL, 1);
+                            const bg = isProfit
+                              ? `rgba(16, 185, 129, ${0.08 + intensity * 0.22})`
+                              : `rgba(239, 68, 68, ${0.08 + intensity * 0.22})`;
+                            const border = isProfit
+                              ? `rgba(16, 185, 129, ${0.15 + intensity * 0.25})`
+                              : `rgba(239, 68, 68, ${0.15 + intensity * 0.25})`;
+
+                            cells.push(
+                              <div
+                                key={dateStr}
+                                className={`cal-cell cal-cell-active ${isToday ? 'cal-cell-today' : ''} ${isProfit ? 'cal-cell-profit' : 'cal-cell-loss'}`}
+                                style={{ background: bg, borderColor: border }}
+                                onClick={() => { setSelectedDay(dateStr); setShowAllTrades(false); setEditingId(null); setExpandedNote(null); }}
+                              >
+                                <div className="cal-cell-top">
+                                  <span className="cal-day-num">{d}</span>
+                                  <span className="cal-trade-count">{dayTrades.length}t</span>
+                                </div>
+                                <div className="cal-cell-pnl" style={{ color: isProfit ? '#34d399' : '#f87171' }}>
+                                  {isProfit ? '+' : ''}{formatUSD(dayPnL)}
+                                </div>
+                                <div className="cal-cell-wr">
+                                  <div className="cal-wr-bar">
+                                    <div className="cal-wr-fill" style={{
+                                      width: `${dayWR}%`,
+                                      background: isProfit ? 'linear-gradient(90deg, #10b981, #34d399)' : 'linear-gradient(90deg, #ef4444, #f87171)'
+                                    }} />
+                                  </div>
+                                  <span className="cal-wr-label">{dayWR.toFixed(0)}%</span>
                                 </div>
                               </div>
-                              <div className="edit-field">
-                                <label>Date</label>
-                                <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
-                              </div>
-                              <div className="edit-field">
-                                <label>Contracts</label>
-                                <input type="number" value={editForm.contracts} onChange={e => setEditForm({ ...editForm, contracts: e.target.value })} />
-                              </div>
-                            </div>
-                            <div className="edit-row">
-                              <div className="edit-field">
-                                <label>Entry</label>
-                                <input type="number" step="0.25" value={editForm.entryPrice} onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })} />
-                              </div>
-                              <div className="edit-field">
-                                <label>Exit</label>
-                                <input type="number" step="0.25" value={editForm.exitPrice} onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })} />
-                              </div>
-                              <div className="edit-field">
-                                <label>SL</label>
-                                <input type="number" step="0.25" value={editForm.stopLoss} onChange={e => setEditForm({ ...editForm, stopLoss: e.target.value })} placeholder="—" />
-                              </div>
-                              <div className="edit-field">
-                                <label>TP</label>
-                                <input type="number" step="0.25" value={editForm.takeProfit} onChange={e => setEditForm({ ...editForm, takeProfit: e.target.value })} placeholder="—" />
-                              </div>
-                            </div>
-                            <div className="edit-row">
-                              <div className="edit-field">
-                                <label>Setup</label>
-                                <select value={editForm.setup} onChange={e => setEditForm({ ...editForm, setup: e.target.value as SetupTag })}>
-                                  {SETUP_TAGS.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                            <div className="edit-row">
-                              <div className="edit-field" style={{ flex: 1 }}>
-                                <label>Note</label>
-                                <input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="Entry reason, observations..." />
-                              </div>
-                            </div>
-                            <div className="edit-actions">
-                              <button className="btn-edit-save" onClick={saveEdit}>Save Changes</button>
-                              <button className="btn-edit-cancel" onClick={cancelEdit}>Cancel</button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                            );
+                          }
+                        }
 
-              {/* === DAY DETAIL VIEW === */}
-              {selectedDay && (
-                <div className="day-detail-view">
-                  {/* Trades list for the day */}
-                  <div className="trades-list">
-                    {selectedDaySorted.map((t, idx) => (
-                      <div key={t.id} className={`trade-row ${expandedNote === t.id ? 'expanded' : ''}`}>
-                        <div className="trade-row-main">
-                          <span className="trade-index">#{idx + 1}</span>
-                          <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
-                            {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
-                          </span>
-                          <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
-                          {t.setup && <span className="trade-setup-badge">{t.setup}</span>}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                            {t.riskPoints && t.rewardPoints ? (
-                              <span className="trade-rr-badge" title={`Planned R:R (TP/SL) | Actual R:R 1:${floor1Str(Math.abs(t.points) / t.riskPoints)}`}>
-                                Plan 1:{floor1Str(t.rewardPoints / t.riskPoints)}
-                              </span>
-                            ) : t.riskPoints ? (
-                              <span className="trade-rr-badge" title="Risk:Reward">1:{floor1Str(Math.abs(t.points) / t.riskPoints)}</span>
-                            ) : null}
-                            <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
-                              {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
+                        // Trailing empties to complete the last row
+                        const totalCells = cells.length;
+                        const trailing = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+                        for (let i = 0; i < trailing; i++) {
+                          cells.push(<div key={`trail-${i}`} className="cal-cell cal-cell-empty" />);
+                        }
+
+                        return cells;
+                      })()}
+                    </div>
+                    {trades.length === 0 && (
+                      <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.8)', marginTop: '1.5rem', fontSize: '0.8rem' }}>
+                        No trades logged yet. Start logging to see your calendar.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* === ALL TRADES VIEW === */}
+                {showAllTrades && !selectedDay && (
+                  <div className="day-detail-view">
+                    <div className="trades-list">
+                      {sortedTrades.map(t => (
+                        <div key={t.id} className={`trade-row ${expandedNote === t.id ? 'expanded' : ''}`}>
+                          <div className="trade-row-main">
+                            <span className="trade-date-col">{formatDateLabel(t.date)}</span>
+                            <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
+                              {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
                             </span>
-                          </div>
-                          <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
-                          <span className="trade-actions">
-                            {(t.note) && (
-                              <button className="screenshot-btn" onClick={() => setExpandedNote(expandedNote === t.id ? null : t.id)} title="View note">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
-                              </button>
-                            )}
-                            {t.screenshotFile ? (
-                              <>
-                                <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="View screenshot">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                            <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
+                            {t.setup && <span className="trade-setup-badge">{t.setup}</span>}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                              {t.riskPoints && t.rewardPoints ? (
+                                <span className="trade-rr-badge" title={`Planned R:R (TP/SL) | Actual R:R 1:${floor1Str(Math.abs(t.points) / t.riskPoints)}`}>
+                                  Plan 1:{floor1Str(t.rewardPoints / t.riskPoints)}
+                                </span>
+                              ) : t.riskPoints ? (
+                                <span className="trade-rr-badge" title="Risk:Reward">1:{floor1Str(Math.abs(t.points) / t.riskPoints)}</span>
+                              ) : null}
+                              <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
+                                {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
+                              </span>
+                            </div>
+                            <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
+                            <span className="trade-actions">
+                              {(t.note) && (
+                                <button className="screenshot-btn" onClick={() => setExpandedNote(expandedNote === t.id ? null : t.id)} title="View note">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
                                 </button>
-                                <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Change image">
+                              )}
+                              {t.screenshotFile ? (
+                                <>
+                                  <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="View screenshot">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                  </button>
+                                  <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Change image">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                                  </button>
+                                </>
+                              ) : (
+                                <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Attach image">
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
                                 </button>
-                              </>
-                            ) : (
-                              <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Attach image">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                              )}
+                              <button className="edit-btn" onClick={() => startEdit(t)} title="Edit trade">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
                               </button>
-                            )}
-                            <button className="edit-btn" onClick={() => startEdit(t)} title="Edit trade">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
-                            </button>
-                            <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
-                          </span>
-                        </div>
-                        {expandedNote === t.id && t.note && (
-                          <div className="trade-note-expanded">{t.note}</div>
-                        )}
-                        {editingId === t.id && editForm && (
-                          <div className="trade-edit-form">
-                            <div className="edit-row">
-                              <div className="edit-field">
-                                <label>Type</label>
-                                <div className="outcome-selector">
-                                  <button className={`outcome-btn ${editForm.isLong ? 'active' : ''}`} style={editForm.isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setEditForm({ ...editForm, isLong: true })}>LONG</button>
-                                  <button className={`outcome-btn ${!editForm.isLong ? 'active' : ''}`} style={!editForm.isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setEditForm({ ...editForm, isLong: false })}>SHORT</button>
+                              <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
+                            </span>
+                          </div>
+                          {expandedNote === t.id && t.note && (
+                            <div className="trade-note-expanded">{t.note}</div>
+                          )}
+                          {editingId === t.id && editForm && (
+                            <div className="trade-edit-form">
+                              <div className="edit-row">
+                                <div className="edit-field">
+                                  <label>Type</label>
+                                  <div className="outcome-selector">
+                                    <button className={`outcome-btn ${editForm.isLong ? 'active' : ''}`} style={editForm.isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setEditForm({ ...editForm, isLong: true })}>LONG</button>
+                                    <button className={`outcome-btn ${!editForm.isLong ? 'active' : ''}`} style={!editForm.isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setEditForm({ ...editForm, isLong: false })}>SHORT</button>
+                                  </div>
+                                </div>
+                                <div className="edit-field">
+                                  <label>Date</label>
+                                  <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
+                                </div>
+                                <div className="edit-field">
+                                  <label>Contracts</label>
+                                  <input type="number" value={editForm.contracts} onChange={e => setEditForm({ ...editForm, contracts: e.target.value })} />
                                 </div>
                               </div>
-                              <div className="edit-field">
-                                <label>Date</label>
-                                <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
+                              <div className="edit-row">
+                                <div className="edit-field">
+                                  <label>Entry</label>
+                                  <input type="number" step="0.25" value={editForm.entryPrice} onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })} />
+                                </div>
+                                <div className="edit-field">
+                                  <label>Exit</label>
+                                  <input type="number" step="0.25" value={editForm.exitPrice} onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })} />
+                                </div>
+                                <div className="edit-field">
+                                  <label>SL</label>
+                                  <input type="number" step="0.25" value={editForm.stopLoss} onChange={e => setEditForm({ ...editForm, stopLoss: e.target.value })} placeholder="—" />
+                                </div>
+                                <div className="edit-field">
+                                  <label>TP</label>
+                                  <input type="number" step="0.25" value={editForm.takeProfit} onChange={e => setEditForm({ ...editForm, takeProfit: e.target.value })} placeholder="—" />
+                                </div>
                               </div>
-                              <div className="edit-field">
-                                <label>Contracts</label>
-                                <input type="number" value={editForm.contracts} onChange={e => setEditForm({ ...editForm, contracts: e.target.value })} />
+                              <div className="edit-row">
+                                <div className="edit-field">
+                                  <label>Setup</label>
+                                  <select value={editForm.setup} onChange={e => setEditForm({ ...editForm, setup: e.target.value as SetupTag })}>
+                                    {SETUP_TAGS.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                                  </select>
+                                </div>
                               </div>
-                            </div>
-                            <div className="edit-row">
-                              <div className="edit-field">
-                                <label>Entry</label>
-                                <input type="number" step="0.25" value={editForm.entryPrice} onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })} />
+                              <div className="edit-row">
+                                <div className="edit-field" style={{ flex: 1 }}>
+                                  <label>Note</label>
+                                  <input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="Entry reason, observations..." />
+                                </div>
                               </div>
-                              <div className="edit-field">
-                                <label>Exit</label>
-                                <input type="number" step="0.25" value={editForm.exitPrice} onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })} />
-                              </div>
-                              <div className="edit-field">
-                                <label>SL</label>
-                                <input type="number" step="0.25" value={editForm.stopLoss} onChange={e => setEditForm({ ...editForm, stopLoss: e.target.value })} placeholder="—" />
-                              </div>
-                              <div className="edit-field">
-                                <label>TP</label>
-                                <input type="number" step="0.25" value={editForm.takeProfit} onChange={e => setEditForm({ ...editForm, takeProfit: e.target.value })} placeholder="—" />
-                              </div>
-                            </div>
-                            <div className="edit-row">
-                              <div className="edit-field">
-                                <label>Setup</label>
-                                <select value={editForm.setup} onChange={e => setEditForm({ ...editForm, setup: e.target.value as SetupTag })}>
-                                  {SETUP_TAGS.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                            <div className="edit-row">
-                              <div className="edit-field" style={{ flex: 1 }}>
-                                <label>Note</label>
-                                <input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="Entry reason, observations..." />
+                              <div className="edit-actions">
+                                <button className="btn-edit-save" onClick={saveEdit}>Save Changes</button>
+                                <button className="btn-edit-cancel" onClick={cancelEdit}>Cancel</button>
                               </div>
                             </div>
-                            <div className="edit-actions">
-                              <button className="btn-edit-save" onClick={saveEdit}>Save Changes</button>
-                              <button className="btn-edit-cancel" onClick={cancelEdit}>Cancel</button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* === DAY DETAIL VIEW === */}
+                {selectedDay && (
+                  <div className="day-detail-view">
+                    {/* Trades list for the day */}
+                    <div className="trades-list">
+                      {selectedDaySorted.map((t, idx) => (
+                        <div key={t.id} className={`trade-row ${expandedNote === t.id ? 'expanded' : ''}`}>
+                          <div className="trade-row-main">
+                            <span className="trade-index">#{idx + 1}</span>
+                            <span className="trade-type" style={{ color: t.isLong ? '#38bdf8' : '#f472b6' }}>
+                              {t.isLong ? 'LONG' : 'SHORT'} x{t.contracts}
+                            </span>
+                            <span className="trade-prices">{t.entryPrice.toFixed(2)} → {t.exitPrice.toFixed(2)}</span>
+                            {t.setup && <span className="trade-setup-badge">{t.setup}</span>}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                              {t.riskPoints && t.rewardPoints ? (
+                                <span className="trade-rr-badge" title={`Planned R:R (TP/SL) | Actual R:R 1:${floor1Str(Math.abs(t.points) / t.riskPoints)}`}>
+                                  Plan 1:{floor1Str(t.rewardPoints / t.riskPoints)}
+                                </span>
+                              ) : t.riskPoints ? (
+                                <span className="trade-rr-badge" title="Risk:Reward">1:{floor1Str(Math.abs(t.points) / t.riskPoints)}</span>
+                              ) : null}
+                              <span className="trade-pts" style={{ color: t.isWin ? '#34d399' : '#f87171' }}>
+                                {t.points > 0 ? '+' : ''}{t.points.toFixed(2)} pts
+                              </span>
+                            </div>
+                            <span className="trade-usd">{formatUSD(t.resultUSD)}</span>
+                            <span className="trade-actions">
+                              {(t.note) && (
+                                <button className="screenshot-btn" onClick={() => setExpandedNote(expandedNote === t.id ? null : t.id)} title="View note">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+                                </button>
+                              )}
+                              {t.screenshotFile ? (
+                                <>
+                                  <button className="screenshot-btn has-img" onClick={() => viewScreenshot(t.screenshotFile!)} title="View screenshot">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                  </button>
+                                  <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Change image">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                                  </button>
+                                </>
+                              ) : (
+                                <button className="screenshot-btn" onClick={() => attachScreenshot(t.id)} title="Attach image">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                                </button>
+                              )}
+                              <button className="edit-btn" onClick={() => startEdit(t)} title="Edit trade">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+                              </button>
+                              <button className="delete-btn" onClick={() => deleteTrade(t.id)}>✕</button>
+                            </span>
+                          </div>
+                          {expandedNote === t.id && t.note && (
+                            <div className="trade-note-expanded">{t.note}</div>
+                          )}
+                          {editingId === t.id && editForm && (
+                            <div className="trade-edit-form">
+                              <div className="edit-row">
+                                <div className="edit-field">
+                                  <label>Type</label>
+                                  <div className="outcome-selector">
+                                    <button className={`outcome-btn ${editForm.isLong ? 'active' : ''}`} style={editForm.isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setEditForm({ ...editForm, isLong: true })}>LONG</button>
+                                    <button className={`outcome-btn ${!editForm.isLong ? 'active' : ''}`} style={!editForm.isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setEditForm({ ...editForm, isLong: false })}>SHORT</button>
+                                  </div>
+                                </div>
+                                <div className="edit-field">
+                                  <label>Date</label>
+                                  <input type="date" value={editForm.date} onChange={e => setEditForm({ ...editForm, date: e.target.value })} />
+                                </div>
+                                <div className="edit-field">
+                                  <label>Contracts</label>
+                                  <input type="number" value={editForm.contracts} onChange={e => setEditForm({ ...editForm, contracts: e.target.value })} />
+                                </div>
+                              </div>
+                              <div className="edit-row">
+                                <div className="edit-field">
+                                  <label>Entry</label>
+                                  <input type="number" step="0.25" value={editForm.entryPrice} onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })} />
+                                </div>
+                                <div className="edit-field">
+                                  <label>Exit</label>
+                                  <input type="number" step="0.25" value={editForm.exitPrice} onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })} />
+                                </div>
+                                <div className="edit-field">
+                                  <label>SL</label>
+                                  <input type="number" step="0.25" value={editForm.stopLoss} onChange={e => setEditForm({ ...editForm, stopLoss: e.target.value })} placeholder="—" />
+                                </div>
+                                <div className="edit-field">
+                                  <label>TP</label>
+                                  <input type="number" step="0.25" value={editForm.takeProfit} onChange={e => setEditForm({ ...editForm, takeProfit: e.target.value })} placeholder="—" />
+                                </div>
+                              </div>
+                              <div className="edit-row">
+                                <div className="edit-field">
+                                  <label>Setup</label>
+                                  <select value={editForm.setup} onChange={e => setEditForm({ ...editForm, setup: e.target.value as SetupTag })}>
+                                    {SETUP_TAGS.map(tag => <option key={tag} value={tag}>{tag}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="edit-row">
+                                <div className="edit-field" style={{ flex: 1 }}>
+                                  <label>Note</label>
+                                  <input type="text" value={editForm.note} onChange={e => setEditForm({ ...editForm, note: e.target.value })} placeholder="Entry reason, observations..." />
+                                </div>
+                              </div>
+                              <div className="edit-actions">
+                                <button className="btn-edit-save" onClick={saveEdit}>Save Changes</button>
+                                <button className="btn-edit-cancel" onClick={cancelEdit}>Cancel</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* End main-content-split */}
             </div>
           </div>
 

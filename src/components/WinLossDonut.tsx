@@ -25,7 +25,7 @@ function WinLossDonut({ trades }: WinLossDonutProps) {
         ctx.clearRect(0, 0, W, H);
 
         if (trades.length === 0) {
-            ctx.fillStyle = '#475569';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
             ctx.font = '11px Inter, system-ui, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('No data', W / 2, H / 2);
