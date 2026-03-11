@@ -4,6 +4,17 @@ import WinLossDonut from './components/WinLossDonut'
 import DrawdownChart from './components/DrawdownChart'
 import './App.css'
 
+const BG_EFFECTS = ['lava', 'aurora', 'nebula', 'waves', 'pulse', 'none'] as const;
+type BgEffect = typeof BG_EFFECTS[number];
+const BG_LABELS: Record<BgEffect, string> = {
+  lava: '🫧 Lava',
+  aurora: '🌌 Aurora',
+  nebula: '✨ Nebula',
+  waves: '🌊 Waves',
+  pulse: '💫 Pulse',
+  none: '⬛ None',
+};
+
 import { Trade, Stats, SetupTag, SETUP_TAGS } from './types';
 import { POINT_VALUE_PER_CONTRACT, TICK_SIZE, EMPTY_STATS } from './constants';
 import { floor1Str, floor2Str, formatUSD, formatDayFull, formatDateLabel } from './utils/formatters';
@@ -27,6 +38,12 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [commissionInput, setCommissionInput] = useState<string>('0.62');
   const [sortOrder, setSortOrder] = useState<'oldest' | 'newest'>('oldest');
+  const [bgEffect, setBgEffect] = useState<BgEffect>(() => (localStorage.getItem('bgEffect') as BgEffect) || 'lava');
+  const [bgOpacity, setBgOpacity] = useState<number>(() => {
+    const saved = localStorage.getItem('bgOpacity');
+    return saved !== null ? Number(saved) : 100;
+  });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Day detail view
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -86,6 +103,18 @@ function App() {
       window.ipcRenderer?.off('nt-trade-received', handleNtTrade);
     };
   }, []);
+
+  // Apply background effect class to body
+  useEffect(() => {
+    document.body.className = `bg-effect-${bgEffect}`;
+    localStorage.setItem('bgEffect', bgEffect);
+  }, [bgEffect]);
+
+  // Apply transparency to the main background color variable
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg-opacity', (bgOpacity / 100).toString());
+    localStorage.setItem('bgOpacity', bgOpacity.toString());
+  }, [bgOpacity]);
 
   // Save trades + recalculate stats
   useEffect(() => {
@@ -328,134 +357,136 @@ function App() {
     <>
       <TitleBar />
       <div className="app-container" onKeyDown={handleKeyDown}>
-        <div className="main-layout">
+        <div className={`main-layout ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>
 
-          {/* Left Panel */}
-          <div className="card left-panel">
-
-            <div className="input-group">
-              <label>Type</label>
-              <div className="outcome-selector">
-                <button className={`outcome-btn ${isLong ? 'active' : ''}`} style={isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setIsLong(true)}>LONG</button>
-                <button className={`outcome-btn ${!isLong ? 'active' : ''}`} style={!isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setIsLong(false)}>SHORT</button>
+          {/* Slim Persistent Sidebar */}
+          <div className="card slim-sidebar">
+            <button className="slim-btn" onClick={() => setIsSidebarOpen(!isSidebarOpen)} title={isSidebarOpen ? "Collapse Form" : "Expand Form"}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                {isSidebarOpen ? (
+                  <><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></>
+                ) : (
+                  <><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></>
+                )}
+              </svg>
+            </button>
+            <div className="slim-bottom-actions">
+              <div className="slim-btn-wrapper">
+                <button className={`slim-btn ${showSettings ? 'active' : ''}`} onClick={() => setShowSettings(!showSettings)} title="Settings">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
+                </button>
               </div>
             </div>
+          </div>
 
-            <div className="input-row">
+          {/* Left Panel Wrapper enables smooth CSS width animations without squishing inner content */}
+          <div className="left-panel-wrapper">
+            <div className="card left-panel">
+
               <div className="input-group">
-                <label>Date</label>
-                <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label>Contracts</label>
-                <input type="number" value={contracts} onChange={(e) => setContracts(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="input-row input-row-4">
-              <div className="input-group">
-                <label>Entry</label>
-                <input type="number" step="0.25" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label>Exit</label>
-                <input type="number" step="0.25" placeholder="0.00" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label>SL</label>
-                <input type="number" step="0.25" placeholder="—" value={stopLossPrice} onChange={(e) => setStopLossPrice(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label>TP</label>
-                <input type="number" step="0.25" placeholder="—" value={takeProfitPrice} onChange={(e) => setTakeProfitPrice(e.target.value)} />
-              </div>
-            </div>
-
-            {/* Setup Tag Selector */}
-            <div className="input-group">
-              <label>Setup</label>
-              <div className="setup-tags">
-                {SETUP_TAGS.map(tag => (
-                  <button
-                    key={tag}
-                    className={`setup-tag ${tradeSetup === tag ? 'active' : ''}`}
-                    onClick={() => setTradeSetup(tag)}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Trade Note */}
-            <div className="input-group">
-              <label>Note</label>
-              <textarea
-                className="trade-note-input"
-                placeholder="Entry reason, emotions, observations..."
-                value={tradeNote}
-                onChange={(e) => setTradeNote(e.target.value)}
-                rows={2}
-              />
-            </div>
-
-            <div className="preview-box">
-              <div className="preview-details">
-                <span className="preview-pill">
-                  <span className="preview-pill-label">PTS</span>
-                  <span className="preview-pill-value" style={{ color: previewPts() >= 0 ? '#34d399' : '#f87171' }}>{previewPts() > 0 ? '+' : ''}{previewPts().toFixed(2)}</span>
-                </span>
-                <span className="preview-pill">
-                  <span className="preview-pill-label">TICKS</span>
-                  <span className="preview-pill-value" style={{ color: previewPts() >= 0 ? '#34d399' : '#f87171' }}>{(previewPts() / TICK_SIZE).toFixed(0)}</span>
-                </span>
-                <span className="preview-pill">
-                  <span className="preview-pill-label">COM</span>
-                  <span className="preview-pill-value">{formatUSD(commissionPerContract * getContractsQty())}</span>
-                </span>
-              </div>
-              <div className="preview-net">
-                <span className="preview-net-label">NET USD</span>
-                <span className="preview-net-amount" style={{ color: previewNet() >= 0 ? '#10b981' : '#f43f5e' }}>
-                  {previewNet() > 0 ? '+' : ''}{formatUSD(previewNet())}
-                </span>
-              </div>
-              <button className="btn-primary" onClick={addTrade} disabled={!entryPrice || !exitPrice} title="Log Trade (ENTER ↵)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                Log Trade
-              </button>
-            </div>
-
-            <div className="left-panel-bottom">
-              {/* Commission config toggle */}
-              <button className="btn-settings" onClick={() => setShowSettings(!showSettings)}>
-                ⚙ Commission: {formatUSD(commissionPerContract)}/contract
-              </button>
-
-              {showSettings && (
-                <div className="settings-dropdown">
-                  <label>Commission per contract (USD)</label>
-                  <div className="settings-row">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={commissionInput}
-                      onChange={(e) => setCommissionInput(e.target.value)}
-                    />
-                    <button className="btn-save-settings" onClick={handleCommissionSave}>Save</button>
-                  </div>
+                <label>Type</label>
+                <div className="outcome-selector">
+                  <button className={`outcome-btn ${isLong ? 'active' : ''}`} style={isLong ? { color: '#38bdf8', borderColor: '#38bdf8' } : {}} onClick={() => setIsLong(true)}>LONG</button>
+                  <button className={`outcome-btn ${!isLong ? 'active' : ''}`} style={!isLong ? { color: '#f472b6', borderColor: '#f472b6' } : {}} onClick={() => setIsLong(false)}>SHORT</button>
                 </div>
-              )}
+              </div>
 
-              <div className="db-actions">
-                <button className="btn-db" onClick={exportDB} title="Export backup">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                  Export
+              <div className="input-row">
+                <div className="input-group">
+                  <label>Date</label>
+                  <input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <label>Contracts</label>
+                  <input type="number" value={contracts} onChange={(e) => setContracts(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="input-row input-row-4">
+                <div className="input-group">
+                  <label>Entry</label>
+                  <input type="number" step="0.25" placeholder="0.00" value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <label>Exit</label>
+                  <input type="number" step="0.25" placeholder="0.00" value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <label>SL</label>
+                  <input type="number" step="0.25" placeholder="—" value={stopLossPrice} onChange={(e) => setStopLossPrice(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <label>TP</label>
+                  <input type="number" step="0.25" placeholder="—" value={takeProfitPrice} onChange={(e) => setTakeProfitPrice(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Setup Tag Selector */}
+              <div className="input-group">
+                <label>Setup</label>
+                <div className="setup-tags">
+                  {SETUP_TAGS.map(tag => (
+                    <button
+                      key={tag}
+                      className={`setup-tag ${tradeSetup === tag ? 'active' : ''}`}
+                      onClick={() => setTradeSetup(tag)}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Trade Note */}
+              <div className="input-group">
+                <label>Note</label>
+                <textarea
+                  className="trade-note-input"
+                  placeholder="Entry reason, emotions, observations..."
+                  value={tradeNote}
+                  onChange={(e) => setTradeNote(e.target.value)}
+                  rows={2}
+                />
+              </div>
+
+              <div className="preview-box">
+                <div className="preview-details">
+                  <span className="preview-pill">
+                    <span className="preview-pill-label">PTS</span>
+                    <span className="preview-pill-value" style={{ color: previewPts() >= 0 ? '#34d399' : '#f87171' }}>{previewPts() > 0 ? '+' : ''}{previewPts().toFixed(2)}</span>
+                  </span>
+                  <span className="preview-pill">
+                    <span className="preview-pill-label">TICKS</span>
+                    <span className="preview-pill-value" style={{ color: previewPts() >= 0 ? '#34d399' : '#f87171' }}>{(previewPts() / TICK_SIZE).toFixed(0)}</span>
+                  </span>
+                  <span className="preview-pill">
+                    <span className="preview-pill-label">COM</span>
+                    <span className="preview-pill-value">{formatUSD(commissionPerContract * getContractsQty())}</span>
+                  </span>
+                </div>
+                <div className="preview-net">
+                  <span className="preview-net-label">NET USD</span>
+                  <span className="preview-net-amount" style={{ color: previewNet() >= 0 ? '#10b981' : '#f43f5e' }}>
+                    {previewNet() > 0 ? '+' : ''}{formatUSD(previewNet())}
+                  </span>
+                </div>
+                <button className="btn-primary" onClick={addTrade} disabled={!entryPrice || !exitPrice} title="Log Trade (ENTER ↵)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  Log Trade
                 </button>
-                <button className="btn-db" onClick={importDB} title="Import backup">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                  Import
-                </button>
+              </div>
+
+              <div className="left-panel-bottom">
+                <div className="db-actions">
+                  <button className="btn-db" onClick={exportDB} title="Export backup">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                    Export Data
+                  </button>
+                  <button className="btn-db" onClick={importDB} title="Import backup">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                    Import Data
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -955,7 +986,76 @@ function App() {
             </div>
           </div>
         )}
-      </div>
+
+        {/* Lightbox Modal */}
+        {lightboxSrc && (
+          <div className="lightbox-overlay" ref={lightboxRef} onClick={(e) => { if (e.target === lightboxRef.current) setLightboxSrc(null); }}>
+            <div className="lightbox-content">
+              <button className="lightbox-close" onClick={() => setLightboxSrc(null)}>✕</button>
+              <img src={lightboxSrc} alt="Trade Screenshot" />
+            </div>
+          </div>
+        )}
+
+        {/* Global Settings Modal */}
+        {showSettings && (
+          <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}>
+            <div className="card settings-modal flex-col-popover">
+
+              <h2 className="settings-modal-title">Application Settings</h2>
+
+              <div className="settings-modal-content">
+                <div className="popover-section settings-section">
+                  <span className="bg-picker-title">Commission Fees</span>
+                  <p className="settings-desc">Global fixed commission fee applied per traded contract.</p>
+                  <div className="settings-row" style={{ maxWidth: '300px' }}>
+                    <div className="input-group">
+                      <label>Amount (USD)</label>
+                      <input type="number" step="0.01" value={commissionInput} onChange={(e) => setCommissionInput(e.target.value)} style={{ padding: '0.8rem' }} />
+                    </div>
+                    <button className="btn-save-settings settings-save-btn-large" onClick={handleCommissionSave}>Save</button>
+                  </div>
+                </div>
+
+                <div className="popover-divider settings-divider"></div>
+
+                <div className="popover-section settings-section">
+                  <span className="bg-picker-title">Background Transparency</span>
+                  <p className="settings-desc">Adjust how much of your Windows Desktop shows through the application.</p>
+                  <div className="settings-row" style={{ maxWidth: '300px', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
+                    <div className="opacity-slider-wrapper">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={bgOpacity}
+                        onChange={(e) => setBgOpacity(Number(e.target.value))}
+                        className="opacity-slider"
+                      />
+                      <span className="opacity-value">{bgOpacity}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="popover-divider settings-divider"></div>
+
+                <div className="popover-section settings-section">
+                  <span className="bg-picker-title">Background Effect</span>
+                  <p className="settings-desc">Choose the animated background style for the application.</p>
+                  <div className="bg-picker-grid modal-bg-grid">
+                    {BG_EFFECTS.map(effect => (
+                      <button key={effect} className={`modal-bg-picker-option ${bgEffect === effect ? 'active' : ''}`} onClick={() => { setBgEffect(effect); }}>
+                        {BG_LABELS[effect]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+      </div >
     </>
   );
 }

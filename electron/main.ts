@@ -29,7 +29,8 @@ function createWindow() {
     center: true,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#050d1a',
+    transparent: true,
+    backgroundColor: '#00000000',
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
